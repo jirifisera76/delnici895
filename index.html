@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dílna — Industriální kreativní studio v Holešovicích</title>
+  <meta name="description" content="Industriální kreativní studio 150 m² v Praze-Holešovicích pro natáčení, focení a produkci. K pronájmu na hodiny, půldny a celé dny." />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=37" />
+
+  <meta property="og:title" content="Dílna — Industriální kreativní studio v Holešovicích" />
+  <meta property="og:description" content="150 m² industriálního kreativního studia v Praze-Holešovicích pro natáčení, focení a produkci." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://studiodilna.cz" />
+</head>
+<body>
+
+  <!-- SVG filtry: grain pro fotky + window-light pro pozadí -->
+  <svg class="grain-svg" aria-hidden="true">
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0"/>
+    </filter>
+  </svg>
+
+
+  <!-- ===== HEADER ===== -->
+  <header class="nav" id="top">
+    <a href="/" class="nav__logo" aria-label="Studio Dílna — domů">
+      <svg viewBox="0 0 1291.92 647.57" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M842.12,0s-24.21,0-50.09,0v647.36h104.31v-88.47l81.48,88.47h50.09S1027.91,0,1027.91,0c-26.97,0-104.31,0-104.31,0v86.11L842.12,0"/>
+        <polygon points="528.02 .2 528.02 647.57 763.9 647.57 763.9 385.88 632.33 385.88 632.33 .2 528.02 .2"/>
+        <path d="M264.01,291.03v356.33h235.88v-356.33c0-17.8-13.09-32.23-29.23-32.23h-177.41c-16.15,0-29.23,14.43-29.23,32.23Z"/>
+        <path d="M264.01,0v180.23c0,17.8,13.09,32.22,29.23,32.22h177.42c16.14,0,29.23-14.43,29.23-32.22V0h-235.88Z"/>
+        <path d="M206.64,0H0v647.36h206.64c16.15,0,29.24-14.43,29.24-32.23V32.23C235.88,14.43,222.79,0,206.64,0ZM131.57,545.64c0,7.18-5.28,12.99-11.79,12.99h-15.47v-299.56h15.47c6.51,0,11.79,5.82,11.79,12.99v273.57Z"/>
+        <path d="M1085.28,0c-16.15,0-29.24,14.43-29.24,32.23v582.91c0,17.8,13.09,32.23,29.24,32.23h75.07v-88.47h27.26v88.47h104.31V0h-206.64ZM1187.61,385.67h-15.47c-6.51,0-11.79-5.82-11.79-12.99V99.11c0-7.18,5.28-12.99,11.79-12.99h15.47v299.56Z"/>
+      </svg>
+    </a>
+    <nav class="nav__menu">
+      <a href="#o-studiu"><span>O studiu</span></a>
+      <a href="#cenik"><span>Ceník</span></a>
+      <a href="#rezervace"><span>Rezervace</span></a>
+    </nav>
+  </header>
+
+  <!-- Overlay nad původním Rezervace tlačítkem — aktivuje se po průjezdu marquee.
+       Mimo .nav, takže není pod jejím mix-blend-mode → renderuje se jako solid rust. -->
+  <a class="nav-cta" href="#rezervace" aria-hidden="true" tabindex="-1">
+    <span class="nav-cta__label">Rezervace</span>
+  </a>
+
+  <!-- ===== HERO ===== -->
+  <section class="hero">
+    <!-- Parallax floating images — sledují kurzor s lerp easingem -->
+    <div class="floating" id="floating" aria-hidden="true">
+      <div class="float-img float-img--1" data-depth="0.5">
+        <img src="https://images.unsplash.com/photo-1727341554370-80e0fe9ad082?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+      </div>
+      <div class="float-img float-img--2" data-depth="1">
+        <img src="https://images.unsplash.com/photo-1640680608781-2e4199dd1579?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+      </div>
+      <div class="float-img float-img--3" data-depth="2">
+        <img src="https://images.unsplash.com/photo-1726083085160-feeb4e1e5b00?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+      </div>
+      <div class="float-img float-img--4" data-depth="1">
+        <img src="https://images.unsplash.com/photo-1562016600-ece13e8ba570?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+      </div>
+      <div class="float-img float-img--5" data-depth="1">
+        <img src="https://images.unsplash.com/photo-1624344965199-ed40391d20f2?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+      </div>
+      <div class="float-img float-img--6" data-depth="2">
+        <img src="https://images.unsplash.com/photo-1677338354108-223e807fb1bd?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+      </div>
+      <div class="float-img float-img--7" data-depth="4">
+        <img src="https://images.unsplash.com/photo-1689553079282-45df1b35741b?q=80&amp;w=500&amp;auto=format&amp;fit=crop" alt="" />
+      </div>
+      <div class="float-img float-img--8" data-depth="1">
+        <img src="https://images.unsplash.com/photo-1721968317938-cf8c60fccd1a?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+      </div>
+    </div>
+
+    <!-- Vycentrovaný titul + CTA, nad floating layer -->
+    <div class="hero__center">
+      <h1 class="hero__title">
+        <span class="hero__title-inner">
+          <span class="line">Industriální</span>
+          <span class="line">prostor</span>
+        </span>
+      </h1>
+      <a href="#rezervace" class="btn-rust">
+        <span class="btn-rust__label">Rezervovat termín</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- ===== MARQUEE — scrolling logos ===== -->
+  <!-- Placeholder loga: nahraď reálnými klienty / SVG, až je budeš mít -->
+  <section class="marquee" aria-label="Klienti a značky">
+    <div class="marquee__track">
+      <span class="marquee__item">Vogue</span>
+      <span class="marquee__item">Loewe</span>
+      <span class="marquee__item">Nike</span>
+      <span class="marquee__item">Apple</span>
+      <span class="marquee__item">Adidas</span>
+      <span class="marquee__item">Spotify</span>
+      <span class="marquee__item">Mercedes-Benz</span>
+      <span class="marquee__item">Forbes</span>
+      <span class="marquee__item">GoPro</span>
+      <span class="marquee__item">Hugo Boss</span>
+      <span class="marquee__item" aria-hidden="true">Vogue</span>
+      <span class="marquee__item" aria-hidden="true">Loewe</span>
+      <span class="marquee__item" aria-hidden="true">Nike</span>
+      <span class="marquee__item" aria-hidden="true">Apple</span>
+      <span class="marquee__item" aria-hidden="true">Adidas</span>
+      <span class="marquee__item" aria-hidden="true">Spotify</span>
+      <span class="marquee__item" aria-hidden="true">Mercedes-Benz</span>
+      <span class="marquee__item" aria-hidden="true">Forbes</span>
+      <span class="marquee__item" aria-hidden="true">GoPro</span>
+      <span class="marquee__item" aria-hidden="true">Hugo Boss</span>
+    </div>
+  </section>
+
+  <!-- ===== O STUDIU ===== -->
+  <section class="about" id="o-studiu">
+    <a class="about__index" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener">Přístavní 1315/7, 170 00 Praha 7-Holešovice</a>
+    <h2 class="about__heading">O studiu</h2>
+    <div class="about__body">
+      <p>Dílna je <strong class="about__hl">industriální kreativní studio</strong> o&nbsp;ploše <strong class="about__hl">150&nbsp;m² v&nbsp;Holešovicích</strong>, vhodné pro <strong class="about__hl">natáčení videí, podcastů, focení, workshopy i&nbsp;menší eventy</strong>. Prostor kombinuje čistý vizuál s&nbsp;industriálním charakterem.</p>
+      <p>Dominantou studia je <strong class="about__hl">bílá cyklorama</strong>, která poskytuje ideální podmínky pro video produkci, focení i&nbsp;komerční projekty. Součástí studia je <strong class="about__hl">variabilní místnost s&nbsp;přirozeným světlem</strong>, kterou lze využít jako podcastové studio nebo konferenční zázemí. Prostor doplňují industriální okna a&nbsp;<strong class="about__hl">unikátní plastový předěl s&nbsp;barevným nasvícením</strong> pro tvorbu výrazných vizuálních efektů.</p>
+      <p>Dílna je navržená jako <strong class="about__hl">flexibilní prostor</strong>, který se přizpůsobí různým typům projektů. Studio je k&nbsp;dispozici <strong class="about__hl">k&nbsp;pronájmu</strong>, včetně možnosti <strong class="about__hl">produkční podpory</strong>.</p>
+    </div>
+  </section>
+
+  <!-- ===== 360° PROHLÍDKA — placeholder pro virtuální tour ===== -->
+  <!-- Vlož sem Matterport / Kuula / Pano2VR iframe, aspect-ratio už je nastavený -->
+  <section class="tour" id="prohlidka">
+    <a class="tour__placeholder" href="#prohlidka" aria-label="Virtuální prohlídka studia">
+      <span class="tour__label">360°</span>
+      <span class="tour__title">Projděte si studio</span>
+      <span class="tour__hint">Sem přijde virtuální prohlídka prostoru</span>
+    </a>
+  </section>
+
+  <!-- ===== MY DĚLNÍCI — auto-scrolling team karty + citace ===== -->
+  <!-- Placeholder: nahraď reálnými fotkami v assets/team/* a swapni jména/role -->
+  <section class="team" id="tym">
+    <blockquote class="team__quote">
+      <p class="team__quote-line">Stavíme prostor, který se přizpůsobí vašemu nápadu —</p>
+      <p class="team__quote-line">ne naopak.</p>
+      <p class="team__quote-line team__quote-line--sub" aria-hidden="true">&nbsp;</p>
+    </blockquote>
+    <div class="team__viewport" aria-label="Tým studia Dílna">
+      <div class="team__track">
+        <article class="team__card">
+          <div class="team__photo">
+            <span class="team__photo-label">A</span>
+            <div class="team__overlay">
+              <span class="team__name">Aneta Bernhardtová</span>
+              <span class="team__role">Truhlář</span>
+            </div>
+          </div>
+        </article>
+        <article class="team__card">
+          <div class="team__photo">
+            <img src="assets/team/jiri.jpg" alt="Jiří Fišera" />
+            <div class="team__overlay">
+              <span class="team__name">Jiří Fišera</span>
+              <span class="team__role">Kovář</span>
+            </div>
+          </div>
+        </article>
+        <article class="team__card">
+          <div class="team__photo">
+            <span class="team__photo-label">M</span>
+            <div class="team__overlay">
+              <span class="team__name">Matyáš Klápa</span>
+              <span class="team__role">Klempíř</span>
+            </div>
+          </div>
+        </article>
+        <article class="team__card">
+          <div class="team__photo">
+            <span class="team__photo-label">M</span>
+            <div class="team__overlay">
+              <span class="team__name">Martin Flousek</span>
+              <span class="team__role">Štukatér</span>
+            </div>
+          </div>
+        </article>
+        <article class="team__card">
+          <div class="team__photo">
+            <span class="team__photo-label">B</span>
+            <div class="team__overlay">
+              <span class="team__name">Barbora Reichová</span>
+              <span class="team__role">Čalounice</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="team__card" aria-hidden="true">
+          <div class="team__photo">
+            <span class="team__photo-label">A</span>
+            <div class="team__overlay">
+              <span class="team__name">Aneta Bernhardtová</span>
+              <span class="team__role">Truhlář</span>
+            </div>
+          </div>
+        </article>
+        <article class="team__card" aria-hidden="true">
+          <div class="team__photo">
+            <img src="assets/team/jiri.jpg" alt="Jiří Fišera" />
+            <div class="team__overlay">
+              <span class="team__name">Jiří Fišera</span>
+              <span class="team__role">Kovář</span>
+            </div>
+          </div>
+        </article>
+        <article class="team__card" aria-hidden="true">
+          <div class="team__photo">
+            <span class="team__photo-label">M</span>
+            <div class="team__overlay">
+              <span class="team__name">Matyáš Klápa</span>
+              <span class="team__role">Klempíř</span>
+            </div>
+          </div>
+        </article>
+        <article class="team__card" aria-hidden="true">
+          <div class="team__photo">
+            <span class="team__photo-label">M</span>
+            <div class="team__overlay">
+              <span class="team__name">Martin Flousek</span>
+              <span class="team__role">Štukatér</span>
+            </div>
+          </div>
+        </article>
+        <article class="team__card" aria-hidden="true">
+          <div class="team__photo">
+            <span class="team__photo-label">B</span>
+            <div class="team__overlay">
+              <span class="team__name">Barbora Reichová</span>
+              <span class="team__role">Čalounice</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CENÍK ===== -->
+  <section class="pricing" id="cenik">
+    <div class="pricing__head">
+      <h2 class="pricing__heading">Ceník</h2>
+    </div>
+
+    <div class="pricing__table-wrap">
+      <table class="pricing__table">
+        <thead>
+          <tr>
+            <th class="pricing__corner" scope="col"></th>
+            <th scope="col" data-space-label="Studio">Studio</th>
+            <th scope="col" data-space-label="Podcastová / konferenční místnost">Podcastová /<br />konferenční místnost</th>
+            <th scope="col" data-space-label="Celé studio">Celé studio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-tier-label="Hodinová sazba">
+            <th scope="row">Hodinová sazba</th>
+            <td class="price-cell" data-price="od 1 200 Kč / h" tabindex="0" role="button">od 1 200 Kč / h</td>
+            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
+            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
+          </tr>
+          <tr data-tier-label="Půldenní pronájem (4 h)">
+            <th scope="row">Půldenní pronájem<small>4 hodiny</small></th>
+            <td class="price-cell" data-price="od 4 200 Kč" tabindex="0" role="button">od 4 200 Kč</td>
+            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
+            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
+          </tr>
+          <tr data-tier-label="Celodenní pronájem (10 h)">
+            <th scope="row">Celodenní pronájem<small>10 hodin</small></th>
+            <td class="price-cell" data-price="od 8 900 Kč" tabindex="0" role="button">od 8 900 Kč</td>
+            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
+            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="pricing__note">Klikni na variantu — propíše se do rezervace dole. Ceny jsou orientační, bez DPH.</p>
+    </div>
+  </section>
+
+  <!-- ===== REZERVACE ===== -->
+  <section class="booking" id="rezervace">
+    <div class="booking__head">
+      <h2 class="booking__heading">
+        <span>Rezervujte</span>
+        <span>termín</span>
+      </h2>
+    </div>
+
+    <div class="booking__layout">
+      <div class="booking__form-col">
+        <div class="booking__variant" id="bookingVariant" hidden>
+          <span class="booking__variant-label">Vybraná varianta</span>
+          <span class="booking__variant-value" id="bookingVariantValue"></span>
+          <span class="booking__variant-price" id="bookingVariantPrice"></span>
+          <button type="button" class="booking__variant-clear" id="bookingVariantClear" aria-label="Zrušit výběr">×</button>
+        </div>
+
+        <form class="form" action="mailto:ahoj@studiodilna.cz" method="post" enctype="text/plain" novalidate>
+          <input type="hidden" name="varianta" id="f-variant" />
+
+          <div class="field">
+            <label for="f-name">Jméno</label>
+            <input id="f-name" name="jmeno" type="text" required autocomplete="name" />
+          </div>
+
+          <div class="field">
+            <label for="f-ico">IČO <span class="field__optional">volitelné</span></label>
+            <input id="f-ico" name="ico" type="text" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" autocomplete="off" />
+          </div>
+
+          <div class="field">
+            <label for="f-email">E-mail</label>
+            <div class="email-input">
+              <input id="f-email" name="email" type="email" required autocomplete="email" />
+              <span class="email-input__ghost" id="emailGhost" aria-hidden="true"></span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="f-phone">Telefon</label>
+            <div class="phone-input">
+              <button type="button" class="phone-flag" id="phoneFlagBtn" aria-haspopup="listbox" aria-expanded="false">
+                <span class="phone-flag__icon" id="phoneFlagIcon">🇨🇿</span>
+                <span class="phone-flag__code" id="phoneFlagCode">+420</span>
+                <span class="phone-flag__caret" aria-hidden="true">▾</span>
+              </button>
+              <ul class="phone-flag__menu" id="phoneFlagMenu" role="listbox" hidden></ul>
+              <input id="f-phone" name="telefon" type="tel" autocomplete="tel" placeholder="123 456 789" />
+              <input type="hidden" name="telefon_predvolba" id="f-phone-prefix" value="+420" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="f-date">Datum</label>
+            <div class="date-input">
+              <input id="f-date" name="datum" type="date" />
+              <span class="date-input__icon" aria-hidden="true">📅</span>
+            </div>
+            <p class="field__warning" id="dateWarning" hidden>
+              Studio je pravděpodobně obsazené. Zašlete nezávaznou poptávku — ozveme se s alternativou.
+            </p>
+          </div>
+
+          <div class="field field--full">
+            <label for="f-msg">Zpráva</label>
+            <textarea id="f-msg" name="zprava" rows="4" placeholder="Co plánujete? Délka, počet lidí, technika…"></textarea>
+          </div>
+
+          <button class="btn-rust btn-rust--block" type="submit">
+            <span class="btn-rust__label">Rezervovat termín</span>
+          </button>
+        </form>
+      </div>
+
+      <div class="booking__calendar-col">
+        <div class="calendar" id="calendar">
+          <div class="calendar__header">
+            <button type="button" class="calendar__nav" data-dir="-1" aria-label="Předchozí měsíc">‹</button>
+            <h3 class="calendar__title" id="calendarTitle"></h3>
+            <button type="button" class="calendar__nav" data-dir="1" aria-label="Další měsíc">›</button>
+          </div>
+          <div class="calendar__weekdays" aria-hidden="true">
+            <span>Po</span><span>Út</span><span>St</span><span>Čt</span><span>Pá</span><span>So</span><span>Ne</span>
+          </div>
+          <div class="calendar__grid" id="calendarGrid"></div>
+          <ul class="calendar__legend" aria-hidden="true">
+            <li><span class="calendar__dot calendar__dot--free"></span>Volné</li>
+            <li><span class="calendar__dot calendar__dot--partial"></span>Částečně</li>
+            <li><span class="calendar__dot calendar__dot--busy"></span>Obsazeno</li>
+          </ul>
+          <p class="calendar__hint" id="calendarHint">Vyber cenu výše — kalendář ti ukáže vytíženost vybraného prostoru.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="foot">
+    <div class="foot__col">
+      <span class="foot__label">Kontakt</span>
+      <a href="mailto:ahoj@studiodilna.cz">ahoj@studiodilna.cz</a>
+    </div>
+    <div class="foot__col">
+      <span class="foot__label">Adresa</span>
+      <span>Přístavní 1315/7<br/>Praha 7 — Holešovice</span>
+    </div>
+    <div class="foot__col foot__col--end">
+      <span class="foot__label">© 2026</span>
+      <span>Studio Dílna</span>
+    </div>
+  </footer>
+
+  <script src="script.js?v=40" defer></script>
+</body>
+</html>
