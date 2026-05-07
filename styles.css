@@ -769,9 +769,20 @@ button { font: inherit; cursor: pointer; }
 .team__viewport {
   position: relative;
   overflow: hidden;
-  /* edge-to-edge: vyseknout se z bočních paddings rodiče */
   margin-left: calc(-1 * var(--pad-x));
   margin-right: calc(-1 * var(--pad-x));
+  /* drag-to-scrub: vertikální gesto patří browseru (page scroll),
+     horizontální nám (posun slideru) */
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.team__viewport.is-dragging { cursor: grabbing; }
+.team__viewport img {
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none; /* eventy chytne viewport, ne img → Safari pohoda */
 }
 
 .team__track {
@@ -923,7 +934,7 @@ button { font: inherit; cursor: pointer; }
    PRICING
    ========================================================= */
 .pricing {
-  padding: 3rem var(--pad-x) 6rem;
+  padding: 3rem var(--pad-x) 3rem;
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(320px, 1fr);
   column-gap: 5rem;
@@ -974,12 +985,14 @@ button { font: inherit; cursor: pointer; }
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-soft);
-  text-align: left;
+  text-align: center;
   vertical-align: bottom;
   padding: 1.6rem 1rem 1.2rem;
   border-bottom: 1px solid var(--line-soft);
   line-height: 1.2;
 }
+.pricing__table thead th[scope="col"]:first-of-type,
+.pricing__table .pricing__corner { text-align: left; }
 .pricing__table .pricing__corner {
   width: 26%;
 }
@@ -1013,6 +1026,8 @@ button { font: inherit; cursor: pointer; }
   vertical-align: top;
   border-bottom: 1px solid var(--line-soft);
   color: var(--ink);
+  white-space: nowrap;
+  text-align: center;
 }
 
 /* Interaktivní cena — celá buňka klikací */
@@ -1029,6 +1044,45 @@ button { font: inherit; cursor: pointer; }
   color: var(--paper);
 }
 .price-cell.is-selected:hover { background: var(--rust-deep); }
+
+/* Flash pro upozornění "vyberte variantu" — jemné rust podbarvení (20% alpha),
+   text barvu měnit nebudeme. Esteticky decentní. */
+.price-cell.is-flash { animation: priceCellFlash 1.4s ease-out; }
+@keyframes priceCellFlash {
+  0%   { background: rgba(214, 80, 49, 0); }
+  15%  { background: rgba(214, 80, 49, 0.2); }
+  45%  { background: rgba(214, 80, 49, 0.2); }
+  100% { background: rgba(214, 80, 49, 0); }
+}
+
+/* Popup hláška hned pod cenovou tabulkou — červená, slide-down + auto-dismiss */
+.pricing__alert {
+  margin-top: 1.2rem;
+  padding: 1rem 1.3rem;
+  background: var(--rust);
+  color: var(--paper);
+  font-family: var(--display);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-left: 3px solid var(--rust-deep);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-12px);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s var(--t-ease),
+    visibility 0s linear 0.3s;
+}
+.pricing__alert.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s var(--t-ease),
+    visibility 0s;
+}
 .pricing__table tbody tr:last-child th,
 .pricing__table tbody tr:last-child td {
   border-bottom: none;
@@ -1038,22 +1092,25 @@ button { font: inherit; cursor: pointer; }
   margin: 2rem 0 0;
   font-size: 0.85rem;
   color: var(--ink-soft);
-  max-width: 60ch;
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .pricing__note { white-space: normal; font-size: 0.78rem; }
 }
 
 @media (max-width: 760px) {
-  .pricing__table thead th { font-size: 0.6rem; letter-spacing: 0.08em; padding: 1rem 0.5rem 0.8rem; }
+  .pricing__table thead th { font-size: 0.6rem; letter-spacing: 0.08em; padding: 1rem 0.4rem 0.8rem; }
   .pricing__table .pricing__corner { width: 30%; }
-  .pricing__table tbody th { font-size: 1rem; padding: 1.2rem 0.5rem; }
+  .pricing__table tbody th { font-size: 1rem; padding: 1.2rem 0.4rem; }
   .pricing__table tbody th small { font-size: 0.6rem; margin-top: 0.3rem; }
-  .pricing__table td { font-size: 0.85rem; padding: 1.2rem 0.5rem; }
+  .pricing__table td { font-size: 0.78rem; padding: 1.2rem 0.4rem; white-space: normal; }
 }
 
 /* =========================================================
    BOOKING — formulář jako dominantní prvek
    ========================================================= */
 .booking {
-  padding: 6rem var(--pad-x) 12rem;
+  padding: 3rem var(--pad-x) 12rem;
   background: var(--ink);
   color: var(--paper);
 }
@@ -1068,34 +1125,44 @@ button { font: inherit; cursor: pointer; }
 /* Vybraná varianta z tabulky — viditelný chip nad formulářem */
 .booking__variant {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 0.75rem 1.4rem;
-  padding: 1.4rem 1.8rem;
-  margin-bottom: 3rem;
+  gap: 0.8rem;
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 1.4rem;
   background: rgba(214, 80, 49, 0.14);
   border: 1px solid var(--rust);
   border-radius: 2px;
+  min-width: 0;
 }
 .booking__variant[hidden] { display: none; }
 .booking__variant-label {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--rust);
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .booking__variant-value {
   font-family: var(--display);
-  font-size: clamp(1.1rem, 2vw, 1.6rem);
+  font-size: clamp(1rem, 1.7vw, 1.35rem);
   text-transform: uppercase;
-  letter-spacing: 0.005em;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .booking__variant-price {
-  margin-left: auto;
   font-family: var(--display);
-  font-size: clamp(1.1rem, 2vw, 1.6rem);
+  font-size: clamp(1rem, 1.7vw, 1.35rem);
   color: var(--rust);
   text-transform: uppercase;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .booking__variant-clear {
   appearance: none;
@@ -1112,10 +1179,10 @@ button { font: inherit; cursor: pointer; }
 .booking__variant-clear:hover { opacity: 1; }
 
 @media (max-width: 640px) {
-  .booking__variant { padding: 1rem 1.2rem; gap: 0.4rem 1rem; }
-  .booking__variant-price { margin-left: 0; width: 100%; order: 3; }
-  .booking__variant-clear { position: absolute; top: 0.6rem; right: 0.8rem; }
-  .booking__variant { position: relative; }
+  .booking__variant { padding: 0.7rem 1rem; gap: 0.6rem; }
+  .booking__variant-label { font-size: 0.55rem; letter-spacing: 0.12em; }
+  .booking__variant-value,
+  .booking__variant-price { font-size: 0.9rem; }
 }
 .booking__index {
   font-size: 0.78rem;
@@ -1138,13 +1205,15 @@ button { font: inherit; cursor: pointer; }
 
 .booking__layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4rem;
+  /* Form má 2 sloupce uvnitř (jméno+IČO atd.), proto má vlastní vnitřní mřížku.
+     Kalendář je na pravé třetině — kompaktnější, čitelnější. */
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: clamp(2rem, 4vw, 4.5rem);
   align-items: start;
 }
 .booking__form-col, .booking__calendar-col { min-width: 0; }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .booking__layout { grid-template-columns: 1fr; gap: 3rem; }
 }
 
@@ -1155,23 +1224,29 @@ button { font: inherit; cursor: pointer; }
   border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Form ve split layoutu — single column kvůli užší ploše,
-   pole jako boxy s pozadím, aby bylo jasně vidět kam kliknout. */
+/* Form ve split layoutu — 2 sloupce pro krátká pole, plus full-width pro zprávu.
+   Pole jako boxy s pozadím, aby bylo jasně vidět kam kliknout. */
 .booking__form-col .form {
-  grid-template-columns: 1fr;
-  gap: 0.9rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
   border-top: 0;
 }
-.booking__form-col .field--full { grid-column: 1; }
+.booking__form-col .field--full { grid-column: 1 / -1; }
+/* Datum samostatně přes celou šířku (kvůli warning hlášce pod ním) */
+.booking__form-col .form > .field:has(#f-date) { grid-column: 1 / -1; }
 .booking__form-col .field,
 .booking__form-col .field:nth-child(odd),
 .booking__form-col .field:nth-child(even) {
-  padding: 1rem 1.2rem 1rem !important;
+  padding: 0.85rem 1.1rem !important;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.14) !important;
-  gap: 0.4rem;
+  gap: 0.3rem;
   cursor: text;
   transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+@media (max-width: 560px) {
+  .booking__form-col .form { grid-template-columns: 1fr; }
 }
 .booking__form-col .field:hover {
   border-color: rgba(255, 255, 255, 0.32);
@@ -1366,7 +1441,7 @@ button { font: inherit; cursor: pointer; }
   font-family: var(--sans);
   font-size: clamp(1.05rem, 1.6vw, 1.3rem);
   padding: 0.2rem 0;
-  resize: vertical;
+  resize: none;
   width: 100%;
 }
 .field input::placeholder,
@@ -1385,12 +1460,222 @@ button { font: inherit; cursor: pointer; }
   margin-top: 3.5rem;
 }
 
+/* Submit tlačítko pod kalendářem v pravém sloupci */
+.booking-form__submit {
+  margin-top: 1rem;
+  width: 100%;
+}
+
+/* Cena celkem box — nad submit tlačítkem, prominentnější než v time pickeru */
+.booking-form__total {
+  margin-top: 1.5rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0.4rem 1rem;
+  padding: 1rem 1.2rem;
+  background: rgba(214, 80, 49, 0.16);
+  border-left: 3px solid var(--rust);
+}
+.booking-form__total[hidden] { display: none; }
+.booking-form__total-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.booking-form__total-detail {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+.booking-form__total-price {
+  font-family: var(--display);
+  font-size: clamp(1.4rem, 2.3vw, 2rem);
+  text-transform: uppercase;
+  color: var(--rust);
+  text-align: right;
+}
+@media (max-width: 560px) {
+  .booking-form__total { grid-template-columns: auto auto; }
+  .booking-form__total-detail { grid-column: 1 / -1; }
+}
+
+/* Time picker — výběr času pronájmu, propojený s variantou + datumem */
+.time-field { cursor: default !important; }
+.time-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.time-picker__hint {
+  margin: 0;
+  font-size: 0.82rem;
+  opacity: 0.55;
+  line-height: 1.4;
+}
+.time-picker__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.time-picker__legend {
+  display: flex;
+  gap: 0.9rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-top: 0.2rem;
+}
+.time-picker__legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.time-picker__legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.time-slot {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--paper);
+  font-family: var(--display);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  min-width: 0;
+  white-space: nowrap;
+}
+.time-slot:hover {
+  border-color: var(--rust);
+  background: rgba(214, 80, 49, 0.12);
+}
+.time-slot--busy {
+  opacity: 0.32;
+  cursor: not-allowed;
+  text-decoration: line-through;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+.time-slot--busy:hover { border-color: rgba(239, 68, 68, 0.28); background: rgba(239, 68, 68, 0.1); }
+.time-slot--in-range {
+  background: rgba(214, 80, 49, 0.32);
+  border-color: rgba(214, 80, 49, 0.55);
+}
+.time-slot--selected,
+.time-slot--selected:hover {
+  background: var(--rust);
+  border-color: var(--rust);
+  color: var(--paper);
+}
+.time-slot--block {
+  flex: 1 1 auto;
+  text-align: center;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+}
+.time-slot--block .time-slot__sub {
+  display: block;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  opacity: 0.65;
+  margin-top: 0.2rem;
+}
+
+.time-picker__total {
+  margin-top: 0.6rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.7rem 0.9rem;
+  background: rgba(214, 80, 49, 0.14);
+  border-left: 2px solid var(--rust);
+}
+.time-picker__total-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.time-picker__total-price {
+  font-family: var(--display);
+  font-size: clamp(1.2rem, 2vw, 1.6rem);
+  text-transform: uppercase;
+  color: var(--rust);
+}
+.time-picker__total-detail {
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+@media (max-width: 560px) {
+  .time-slot { font-size: 0.75rem; padding: 0.45rem 0.55rem; }
+  .time-picker__total { flex-wrap: wrap; }
+}
+
+/* Toast — popup notifikace dole (vpravo na desktopu, na střed na mobilu),
+   slide-up z spod + auto-dismiss. */
+.toast {
+  position: fixed;
+  bottom: clamp(1rem, 2vw, 2rem);
+  right: clamp(1rem, 2vw, 2rem);
+  z-index: 1000;
+  max-width: min(380px, calc(100vw - 2rem));
+  padding: 1rem 1.3rem;
+  background: var(--ink);
+  color: var(--paper);
+  border-left: 3px solid var(--rust);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.32);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  transform: translateY(calc(100% + 2rem));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.35s var(--t-ease), opacity 0.35s ease;
+}
+.toast.is-visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (max-width: 560px) {
+  .toast {
+    left: 1rem;
+    right: 1rem;
+    max-width: none;
+  }
+}
+
+.form__feedback {
+  grid-column: 1 / -1;
+  margin-top: 1.4rem;
+  padding: 1.1rem 1.3rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  border-left: 2px solid;
+}
+.form__feedback[hidden] { display: none; }
+.form__feedback--success {
+  background: rgba(74, 222, 128, 0.1);
+  border-left-color: #4ade80;
+  color: #d1fae5;
+}
+.form__feedback--error {
+  background: rgba(239, 68, 68, 0.12);
+  border-left-color: #ef4444;
+  color: #fecaca;
+}
+
 /* =========================================================
    CALENDAR — vytíženost studia podle vybrané varianty
    ========================================================= */
 .calendar {
   border: 1px solid rgba(255, 255, 255, 0.18);
-  padding: 1.6rem 1.6rem 1.4rem;
+  padding: 1.2rem 1.2rem 1.1rem;
   background: rgba(255, 255, 255, 0.03);
 }
 .calendar__header {
@@ -1446,14 +1731,14 @@ button { font: inherit; cursor: pointer; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   padding: 2px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
   font-family: var(--display);
-  font-size: clamp(0.85rem, 1.2vw, 1.05rem);
+  font-size: 0.95rem;
   position: relative;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
   user-select: none;
 }
 .calendar__day:hover { border-color: var(--rust); background: rgba(214, 80, 49, 0.1); }
@@ -1525,6 +1810,100 @@ button { font: inherit; cursor: pointer; }
     padding: 1.4rem 0 1.2rem;
     border-right: 0;
   }
+}
+
+/* =========================================================
+   MAPA — Leaflet + Carto Positron, custom rust pin s pulsem
+   a popiskem STUDIO DÍLNA.
+   ========================================================= */
+.map {
+  position: relative;
+  width: 100%;
+  height: clamp(320px, 48vw, 560px);
+  background: #f5f5f5;
+  overflow: hidden;
+}
+.map__canvas {
+  width: 100%;
+  height: 100%;
+  filter: grayscale(100%) contrast(1.06);
+}
+.map .leaflet-marker-icon,
+.map .leaflet-control { filter: none; }
+
+.map-pin {
+  position: relative;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.map-pin__dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  background: var(--rust);
+  border: 2px solid var(--paper);
+  border-radius: 50%;
+  box-shadow: 0 4px 14px rgba(214, 80, 49, 0.5);
+}
+.map-pin__pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--rust);
+  opacity: 0.3;
+  animation: map-pin-pulse 2s ease-out infinite;
+}
+.map-pin__label {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-family: var(--display);
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--paper);
+  padding: 6px 10px;
+  border: 1px solid var(--ink);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+@keyframes map-pin-pulse {
+  0%   { transform: scale(1);   opacity: 0.45; }
+  100% { transform: scale(3.2); opacity: 0; }
+}
+
+.map__cta {
+  position: absolute;
+  right: clamp(1rem, 3vw, 2.5rem);
+  bottom: clamp(1rem, 3vw, 2rem);
+  z-index: 500; /* nad Leaflet kontrolky */
+  display: inline-flex;
+  align-items: center;
+  padding: 0.75rem 1.2rem;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--display);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+.map__cta:hover { background: var(--rust); }
+
+@media (max-width: 640px) {
+  .map { height: clamp(260px, 60vw, 380px); }
+  .map__cta { font-size: 0.72rem; padding: 0.55rem 0.9rem; }
 }
 
 /* =========================================================

@@ -1,3 +1,103 @@
+/* =========================================================
+   AVAILABILITY — sdílený data layer pro kalendář i time picker.
+
+   HIERARCHIE PROSTORŮ:
+   "Celé studio" je nadřazené — obsahuje "Studio" + "Podcastovou".
+   - Rezervace "Celé studio" blokuje VŠECHNY tři varianty.
+   - Rezervace "Studio" blokuje "Studio" + "Celé studio" (Podcastová zůstává volná).
+   - Rezervace "Podcastová" blokuje "Podcastová" + "Celé studio" (Studio zůstává volné).
+
+   Veřejné API:
+   - getBusyHours(dateISO, space) → Set<hour> obsazených hodin pro daný prostor
+   - getDayStatus(dateISO, space) → 'free' | 'partial' | 'busy'
+
+   Vnitřní model: getRawBookings(dateISO) → [{space, hours}, ...] — seznam reálných
+   rezervací. getBusyHours pak resolve podle hierarchie. Až napojíme Google Sheet,
+   stačí přepsat getRawBookings, nic dalšího se měnit nebude.
+   ========================================================= */
+window.dilnaAvailability = (function () {
+  const HOURLY_START = 8;
+  const HOURLY_END = 22;
+  const TOTAL_HOURS = HOURLY_END - HOURLY_START;
+
+  const SPACE_STUDIO = 'Studio';
+  const SPACE_PODCAST = 'Podcastová / konferenční místnost';
+  const SPACE_WHOLE = 'Celé studio';
+  const SPACES = [SPACE_STUDIO, SPACE_PODCAST, SPACE_WHOLE];
+
+  function hashCode(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  }
+  function isClosedDay(dateISO) {
+    if (!dateISO) return false;
+    const d = new Date(dateISO + 'T00:00:00');
+    return d.getDay() === 0; // neděle = zavřeno
+  }
+  function allHoursArray() {
+    const a = [];
+    for (let h = HOURLY_START; h < HOURLY_END; h++) a.push(h);
+    return a;
+  }
+
+  // Rezervace daného prostoru blokuje dotazovaný prostor?
+  function conflicts(bookedSpace, querySpace) {
+    if (bookedSpace === querySpace) return true;
+    if (bookedSpace === SPACE_WHOLE) return true;   // celé blokuje vše
+    if (querySpace === SPACE_WHOLE) return true;    // dotaz na celé → každá sub-rezervace ho blokuje
+    return false; // Studio ↔ Podcastová jsou nezávislé
+  }
+
+  // Mock raw rezervací — později nahradíme fetchem z Google Sheets.
+  // Vrátí pole { space, hours } pro daný den.
+  function getRawBookings(dateISO) {
+    if (!dateISO) return [];
+    if (isClosedDay(dateISO)) {
+      return [{ space: SPACE_WHOLE, hours: allHoursArray() }];
+    }
+    const seed = hashCode(dateISO);
+    const numBookings = seed % 3; // 0–2 rezervace denně
+    const bookings = [];
+    for (let i = 0; i < numBookings; i++) {
+      const sp = SPACES[(seed >> (i * 5)) % 3];
+      const startH = HOURLY_START + (((seed >> (i * 7)) & 0xff) % (TOTAL_HOURS - 1));
+      const len = 1 + (((seed >> (i * 3)) & 0x3) % 4); // 1–4 hodiny
+      const endH = Math.min(HOURLY_END, startH + len);
+      const hours = [];
+      for (let h = startH; h < endH; h++) hours.push(h);
+      bookings.push({ space: sp, hours });
+    }
+    return bookings;
+  }
+
+  function getBusyHours(dateISO, space) {
+    if (!dateISO || !space) return new Set();
+    const busy = new Set();
+    for (const b of getRawBookings(dateISO)) {
+      if (conflicts(b.space, space)) b.hours.forEach((h) => busy.add(h));
+    }
+    return busy;
+  }
+
+  function getDayStatus(dateISO, space) {
+    if (isClosedDay(dateISO)) return 'busy';
+    const busy = getBusyHours(dateISO, space);
+    if (busy.size === 0) return 'free';
+    if (busy.size >= TOTAL_HOURS) return 'busy';
+    return 'partial';
+  }
+
+  return {
+    getBusyHours,
+    getDayStatus,
+    getRawBookings,
+    HOURLY_START,
+    HOURLY_END,
+    SPACES: { STUDIO: SPACE_STUDIO, PODCAST: SPACE_PODCAST, WHOLE: SPACE_WHOLE },
+  };
+})();
+
 // Parallax floating images + drag-to-move
 // — parallax: kurzor řídí translate s lerp easingem
 // — drag: pointerdown chytne obrázek, pointermove ho přesouvá, release nastaví novou home pozici
@@ -285,34 +385,34 @@ if ('IntersectionObserver' in window) {
   let targetDirection = direction;
   let lastTime = performance.now();
   let isHovered = false;
+  let isDragging = false;
 
-  // Lerp factor pro plynulý reverse — ~1.5s na úplnou změnu směru
   const SMOOTHING = 0.04;
+
+  function applyTransform() {
+    // Wrap — zachová pozici v rozsahu [-wrapDist, 0] díky duplikátům
+    while (position > 0) position -= wrapDist;
+    while (position < -wrapDist) position += wrapDist;
+    track.style.transform = 'translateX(' + position.toFixed(2) + 'px)';
+  }
 
   function tick(now) {
     const dt = Math.min(0.05, (now - lastTime) / 1000);
     lastTime = now;
 
-    if (!isHovered) {
+    if (!isHovered && !isDragging) {
       if (direction !== targetDirection) {
         direction += (targetDirection - direction) * SMOOTHING;
         if (Math.abs(direction - targetDirection) < 0.005) direction = targetDirection;
       }
-
       position += direction * speedPxPerSec * dt;
-
-      // Wrap-around — duplikáty zaručují seamless přechod oběma směry
-      if (position > 0) position -= wrapDist;
-      else if (position < -wrapDist) position += wrapDist;
-
-      track.style.transform = 'translateX(' + position.toFixed(2) + 'px)';
+      applyTransform();
     }
 
     requestAnimationFrame(tick);
   }
 
   function scheduleReverse() {
-    // 10–45 sekund
     const interval = 10000 + Math.random() * 35000;
     setTimeout(() => {
       targetDirection = -targetDirection;
@@ -323,7 +423,55 @@ if ('IntersectionObserver' in window) {
   viewport.addEventListener('mouseenter', () => { isHovered = true; });
   viewport.addEventListener('mouseleave', () => {
     isHovered = false;
-    lastTime = performance.now(); // restart dt clock
+    lastTime = performance.now();
+  });
+
+  // ===== DRAG-TO-SCRUB — uživatel chytne slider a posune si ho sám =====
+  let dragStartX = 0;
+  let dragStartPos = 0;
+
+  function startDrag(clientX) {
+    isDragging = true;
+    dragStartX = clientX;
+    dragStartPos = position;
+    viewport.classList.add('is-dragging');
+  }
+  function moveDrag(clientX) {
+    if (!isDragging) return;
+    const delta = clientX - dragStartX;
+    position = dragStartPos + delta;
+    applyTransform();
+  }
+  function endDrag() {
+    if (!isDragging) return;
+    isDragging = false;
+    viewport.classList.remove('is-dragging');
+    lastTime = performance.now();
+  }
+
+  // Mouse — listenery na window, aby drag přežil opuštění viewportu
+  viewport.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    startDrag(e.clientX);
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => moveDrag(e.clientX));
+  window.addEventListener('mouseup', endDrag);
+  window.addEventListener('blur', endDrag);
+
+  // Touch — touch-action: pan-y v CSS pošle horizontální gesto sem
+  viewport.addEventListener('touchstart', (e) => {
+    if (e.touches[0]) startDrag(e.touches[0].clientX);
+  }, { passive: true });
+  viewport.addEventListener('touchmove', (e) => {
+    if (e.touches[0]) moveDrag(e.touches[0].clientX);
+  }, { passive: true });
+  viewport.addEventListener('touchend', endDrag);
+  viewport.addEventListener('touchcancel', endDrag);
+
+  // Native image drag-and-drop disable
+  viewport.querySelectorAll('img').forEach((img) => {
+    img.addEventListener('dragstart', (e) => e.preventDefault());
   });
 
   scheduleReverse();
@@ -498,10 +646,11 @@ if ('IntersectionObserver' in window) {
     const colIdx = tds.indexOf(cell);
     const space = spaceLabels[colIdx] || '';
 
-    const label = [space, tier].filter(Boolean).join(' · ');
-    variantValue.textContent = label;
+    // Chip zobrazuje jen prostor + cenu (kompaktní jeden řádek).
+    // Tier ukládáme do hidden inputu pro form data.
+    variantValue.textContent = space;
     variantPrice.textContent = price;
-    if (variantInput) variantInput.value = `${label} — ${price}`;
+    if (variantInput) variantInput.value = `${space} · ${tier} — ${price}`;
     variantBox.hidden = false;
 
     // Notifikuj kalendář o změně varianty (filtrování vytíženosti)
@@ -590,21 +739,12 @@ if ('IntersectionObserver' in window) {
   let selectedTier = null;
   let pickedISO = null;
 
-  // Deterministický hash → mock vytíženost. Stejný den+prostor+varianta
-  // dává vždy stejný stav (jinak by se kalendář mezi rendery „měnil sám").
-  function hashCode(str) {
-    let h = 0;
-    for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
-    return Math.abs(h);
-  }
+  // Status čerpá ze sdíleného `dilnaAvailability` — stejné busy hodiny
+   // jako time picker. Pokud space není vybrán, zobrazíme defaultní pohled
+   // (pro Studio jako nejběžnější variantu).
   function getStatus(date, space, tier) {
-    const dow = date.getDay();
-    if (dow === 0) return 'busy'; // neděle zavřeno
-    const seed = hashCode(`${iso(date)}|${space || 'any'}|${tier || 'any'}`);
-    const r = (seed % 100) / 100;
-    if (r < 0.55) return 'free';
-    if (r < 0.85) return 'partial';
-    return 'busy';
+    const sp = space || 'Studio';
+    return window.dilnaAvailability.getDayStatus(iso(date), sp);
   }
   function iso(d) {
     const y = d.getFullYear();
@@ -897,25 +1037,486 @@ if ('IntersectionObserver' in window) {
   pick(COUNTRIES[0]);
 })();
 
-/* =========================================================
-   DATE INPUT — varování když je termín pravděpodobně obsazený
-   ========================================================= */
-(function initDateWarning() {
-  const dateInput = document.getElementById('f-date');
-  const warning = document.getElementById('dateWarning');
-  if (!dateInput || !warning) return;
 
-  function check() {
-    const val = dateInput.value;
-    if (!val || typeof window.dilnaGetDayStatus !== 'function') {
-      warning.hidden = true;
+/* =========================================================
+   TIME PICKER — výběr času pronájmu propojený s variantou + datumem.
+
+   Architektura:
+   - Stav držíme v IIFE: aktuální (space, tier, basePrice), datum, picknutý čas.
+   - Listenery: variant:select / variant:clear / f-date 'change'.
+   - getBusyHours(dateISO, space) je "data layer" — teď deterministický mock,
+     později to nahradíme fetchem z Google Sheet (stejný interface).
+   - Hodinová sazba: range slot picker (klik = start, druhý klik = konec).
+   - Půldenní: 3 fixní bloky (dopo / odpo / večer).
+   - Celodenní: 1 fixní blok 9:00–19:00.
+   - Cena: hodinová násobí počet započatých hodin × hourly_rate;
+     půldenní/celodenní je fixní za blok.
+   - Hidden inputy cas_od / cas_do / cena_celkem se zapisují do formuláře.
+   ========================================================= */
+(function initTimePicker() {
+  const root = document.getElementById('timePicker');
+  const fromInput = document.getElementById('f-time-from');
+  const toInput = document.getElementById('f-time-to');
+  const totalInput = document.getElementById('f-price-total');
+  const dateInput = document.getElementById('f-date');
+  if (!root) return;
+
+  // Cenová matice — base ceny per (space, tier).
+  // Klíče sedí na data-space-label v <th> a data-tier-label v <tr>.
+  const PRICING = {
+    'Studio': { hourly: 1200, halfday: 4200, fullday: 8900 },
+    'Podcastová / konferenční místnost': { hourly: 600, halfday: 2200, fullday: 4800 },
+    'Celé studio': { hourly: 1700, halfday: 5800, fullday: 12500 },
+  };
+  const HOURLY_START = 8;     // první možný start
+  const HOURLY_END = 22;      // poslední možný end (slot 21:00 = poslední startovací)
+  const HALF_DAY_OPTIONS = [
+    { label: 'Dopoledne', from: '09:00', to: '13:00', hours: [9, 10, 11, 12] },
+    { label: 'Odpoledne', from: '14:00', to: '18:00', hours: [14, 15, 16, 17] },
+    { label: 'Večer',     from: '18:00', to: '22:00', hours: [18, 19, 20, 21] },
+  ];
+  const FULL_DAY = { from: '09:00', to: '19:00', hours: Array.from({ length: 10 }, (_, i) => 9 + i) };
+
+  // Stav
+  let space = null;
+  let tier = null;
+  let dateISO = null;
+  let pickStart = null; // hour number
+  let pickEnd = null;   // hour number (exclusive, e.g. start=14, end=18 → 4 hours)
+
+  // Sdílený zdroj — stejné busy hodiny vidí kalendář i time picker
+  function getBusyHours(d, sp) {
+    return window.dilnaAvailability.getBusyHours(d, sp);
+  }
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function hourLabel(h) { return pad(h) + ':00'; }
+
+  function clearPicked() {
+    pickStart = null; pickEnd = null;
+    fromInput.value = ''; toInput.value = ''; totalInput.value = '';
+  }
+
+  function tierKey() {
+    if (!tier) return null;
+    if (tier === 'Hodinová sazba') return 'hourly';
+    if (tier.startsWith('Půldenní')) return 'halfday';
+    if (tier.startsWith('Celodenní')) return 'fullday';
+    return null;
+  }
+  function basePrice() {
+    if (!space || !tier) return 0;
+    const k = tierKey();
+    return (PRICING[space] && PRICING[space][k]) || 0;
+  }
+
+  // Total box je mimo time picker — nad submit tlačítkem
+  const totalBox = document.getElementById('formTotal');
+  const totalDetail = document.getElementById('formTotalDetail');
+  const totalPrice = document.getElementById('formTotalPrice');
+
+  function showTotal(detail, total) {
+    if (!totalBox) return;
+    if (totalDetail) totalDetail.textContent = detail;
+    if (totalPrice) totalPrice.textContent = total.toLocaleString('cs-CZ') + ' Kč';
+    totalBox.hidden = false;
+  }
+  function hideTotal() {
+    if (totalBox) totalBox.hidden = true;
+  }
+
+  function render() {
+    root.innerHTML = '';
+    if (!space || !tier) {
+      root.innerHTML = '<p class="time-picker__hint">Nejdřív vyberte cenu v ceníku výše.</p>';
+      clearPicked();
+      hideTotal();
       return;
     }
-    const status = window.dilnaGetDayStatus(val);
-    warning.hidden = !(status === 'busy');
+    if (!dateISO) {
+      root.innerHTML = '<p class="time-picker__hint">Vyberte datum v kalendáři vpravo (nebo klikněte do pole Datum).</p>';
+      clearPicked();
+      hideTotal();
+      return;
+    }
+    const busy = getBusyHours(dateISO, space);
+    const k = tierKey();
+    if (k === 'hourly') renderHourly(busy);
+    else if (k === 'halfday') renderHalfDay(busy);
+    else if (k === 'fullday') renderFullDay(busy);
   }
-  dateInput.addEventListener('change', check);
-  dateInput.addEventListener('input', check);
-  // varianta změnila vytíženost → re-check
-  document.addEventListener('calendar:rerender', check);
+
+  function renderHourly(busy) {
+    const row = document.createElement('div');
+    row.className = 'time-picker__row';
+    for (let h = HOURLY_START; h < HOURLY_END; h++) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'time-slot';
+      btn.dataset.hour = String(h);
+      btn.textContent = hourLabel(h);
+      const isBusy = busy.has(h);
+      if (isBusy) btn.classList.add('time-slot--busy');
+      if (pickStart !== null && pickEnd !== null) {
+        if (h >= pickStart && h < pickEnd) btn.classList.add('time-slot--in-range');
+        if (h === pickStart) btn.classList.add('time-slot--selected');
+        if (h === pickEnd - 1) btn.classList.add('time-slot--selected');
+      } else if (pickStart !== null && h === pickStart) {
+        btn.classList.add('time-slot--selected');
+      }
+      if (!isBusy) btn.addEventListener('click', () => onHourClick(h, busy));
+      row.appendChild(btn);
+    }
+    root.appendChild(row);
+
+    const legend = document.createElement('div');
+    legend.className = 'time-picker__legend';
+    legend.innerHTML =
+      '<span><i style="background:rgba(255,255,255,0.18)"></i>Volné</span>' +
+      '<span><i style="background:#ef4444"></i>Obsazené</span>' +
+      '<span><i style="background:var(--rust)"></i>Vybráno</span>';
+    root.appendChild(legend);
+
+    if (pickStart !== null && pickEnd !== null) {
+      const hours = pickEnd - pickStart;
+      const total = hours * basePrice();
+      const detail = `${hourLabel(pickStart)}–${hourLabel(pickEnd)} · ${hours} h × ${basePrice().toLocaleString('cs-CZ')} Kč`;
+      showTotal(detail, total);
+      writeForm(hourLabel(pickStart), hourLabel(pickEnd), total);
+    } else {
+      hideTotal();
+      const hint = document.createElement('p');
+      hint.className = 'time-picker__hint';
+      hint.textContent = pickStart === null
+        ? 'Klikněte na hodinu začátku.'
+        : `Začátek ${hourLabel(pickStart)}. Klikněte na hodinu konce.`;
+      root.appendChild(hint);
+    }
+  }
+
+  function onHourClick(h, busy) {
+    if (pickStart === null || (pickStart !== null && pickEnd !== null)) {
+      // začínáme nový výběr
+      pickStart = h;
+      pickEnd = null;
+    } else {
+      // máme start, klikáme end
+      let end;
+      if (h <= pickStart) {
+        // klik dřív/stejně → swap a end = old_start + 1
+        const newStart = h;
+        end = pickStart + 1;
+        pickStart = newStart;
+      } else {
+        end = h + 1; // exkluzivní, vybraná hodina je poslední vč.
+      }
+      // nesmí přejít přes busy hodinu
+      let blocked = false;
+      for (let x = pickStart; x < end; x++) if (busy.has(x)) { blocked = true; break; }
+      if (blocked) {
+        // ukaž jen start, zruš end
+        pickStart = h;
+        pickEnd = null;
+      } else {
+        pickEnd = end;
+      }
+    }
+    render();
+  }
+
+  // Sjednocená warning hláška pro busy bloky (půldenní i celodenní)
+  const BUSY_WARNING = 'Tento termín je částečně obsazený. Pošlete nezávaznou poptávku — ozveme se vám s možnostmi.';
+
+  function renderHalfDay(busy) {
+    const row = document.createElement('div');
+    row.className = 'time-picker__row';
+    HALF_DAY_OPTIONS.forEach((opt) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'time-slot time-slot--block';
+      const isBusy = opt.hours.some((h) => busy.has(h));
+      btn.innerHTML = `${opt.label}<span class="time-slot__sub">${opt.from}–${opt.to}</span>`;
+      if (isBusy) btn.classList.add('time-slot--busy');
+      const fromH = parseInt(opt.from, 10);
+      const toH = parseInt(opt.to, 10);
+      if (pickStart === fromH && pickEnd === toH) btn.classList.add('time-slot--selected');
+      // Vždy klikatelné — i busy. Po kliku ukážeme warning.
+      btn.addEventListener('click', () => {
+        pickStart = fromH;
+        pickEnd = toH;
+        render();
+      });
+      row.appendChild(btn);
+    });
+    root.appendChild(row);
+
+    // Vybraný blok je busy? Ukaž warning
+    let pickedIsBusy = false;
+    if (pickStart !== null) {
+      const pickedOpt = HALF_DAY_OPTIONS.find((opt) => parseInt(opt.from, 10) === pickStart);
+      pickedIsBusy = pickedOpt && pickedOpt.hours.some((h) => busy.has(h));
+    }
+    if (pickedIsBusy) appendBusyWarning();
+
+    if (pickStart !== null) {
+      const detail = `Půldenní paušál · ${hourLabel(pickStart)}–${hourLabel(pickEnd)}`;
+      showTotal(detail, basePrice());
+      writeForm(hourLabel(pickStart), hourLabel(pickEnd), basePrice());
+    } else {
+      hideTotal();
+      const hint = document.createElement('p');
+      hint.className = 'time-picker__hint';
+      hint.textContent = 'Vyberte jeden ze tří 4hodinových bloků.';
+      root.appendChild(hint);
+    }
+  }
+
+  function renderFullDay(busy) {
+    const fromH = parseInt(FULL_DAY.from, 10);
+    const toH = parseInt(FULL_DAY.to, 10);
+    const isBusy = FULL_DAY.hours.some((h) => busy.has(h));
+    const row = document.createElement('div');
+    row.className = 'time-picker__row';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'time-slot time-slot--block';
+    btn.innerHTML = `Celý den<span class="time-slot__sub">${FULL_DAY.from}–${FULL_DAY.to} · 10 h</span>`;
+    if (isBusy) btn.classList.add('time-slot--busy');
+    if (pickStart === fromH && pickEnd === toH) btn.classList.add('time-slot--selected');
+    // Vždy klikatelné — i busy
+    btn.addEventListener('click', () => {
+      pickStart = fromH; pickEnd = toH; render();
+    });
+    row.appendChild(btn);
+    root.appendChild(row);
+
+    // Warning když je vybráno + busy
+    if (isBusy && pickStart !== null) appendBusyWarning();
+
+    if (pickStart !== null) {
+      const detail = `Celodenní paušál · ${hourLabel(pickStart)}–${hourLabel(pickEnd)}`;
+      showTotal(detail, basePrice());
+      writeForm(hourLabel(pickStart), hourLabel(pickEnd), basePrice());
+    } else {
+      hideTotal();
+    }
+  }
+
+  function appendBusyWarning() {
+    const w = document.createElement('p');
+    w.className = 'field__warning';
+    w.textContent = BUSY_WARNING;
+    root.appendChild(w);
+  }
+
+  function appendTotal(detail, total, range) {
+    const box = document.createElement('div');
+    box.className = 'time-picker__total';
+    box.innerHTML =
+      `<span class="time-picker__total-label">Cena celkem</span>` +
+      `<span class="time-picker__total-detail">${detail} · ${range}</span>` +
+      `<span class="time-picker__total-price">${total.toLocaleString('cs-CZ')} Kč</span>`;
+    root.appendChild(box);
+  }
+
+  function writeForm(from, to, total) {
+    fromInput.value = from;
+    toInput.value = to;
+    totalInput.value = total;
+  }
+
+  // ===== Hooks na události =====
+  document.addEventListener('variant:select', (e) => {
+    space = e.detail.space || null;
+    tier = e.detail.tier || null;
+    pickStart = null; pickEnd = null; // změna varianty zruší výběr času
+    render();
+  });
+  document.addEventListener('variant:clear', () => {
+    space = null; tier = null;
+    pickStart = null; pickEnd = null;
+    render();
+  });
+  if (dateInput) {
+    const onDate = () => {
+      const v = dateInput.value;
+      if (v !== dateISO) {
+        dateISO = v || null;
+        // Změna data = nový stav vytíženosti, zrušíme výběr
+        pickStart = null; pickEnd = null;
+        render();
+      }
+    };
+    dateInput.addEventListener('change', onDate);
+    dateInput.addEventListener('input', onDate);
+  }
+
+  render();
 })();
+
+/* =========================================================
+   TOAST — popup notifikace v rohu obrazovky, auto-dismiss po 4 s
+   ========================================================= */
+window.dilnaToast = (function () {
+  const el = document.getElementById('toast');
+  let hideTimer = null;
+  function show(msg, duration = 4000) {
+    if (!el) return;
+    el.textContent = msg;
+    requestAnimationFrame(() => el.classList.add('is-visible'));
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => el.classList.remove('is-visible'), duration);
+  }
+  return { show };
+})();
+
+/* =========================================================
+   FLASH PRICING ERROR — bliknou všechny cenové buňky červeně,
+   pod tabulkou se objeví červený popup. Auto-dismiss po 4 s.
+   ========================================================= */
+function flashPricingError() {
+  const cells = document.querySelectorAll('.price-cell');
+  cells.forEach((cell) => {
+    cell.classList.remove('is-flash');
+    // Force reflow → animace se restartuje, i když ji někdo právě dohrával
+    void cell.offsetWidth;
+    cell.classList.add('is-flash');
+  });
+  setTimeout(() => cells.forEach((c) => c.classList.remove('is-flash')), 1500);
+
+  const alertEl = document.getElementById('pricingAlert');
+  if (alertEl) {
+    alertEl.classList.add('is-visible');
+    clearTimeout(alertEl._hideT);
+    alertEl._hideT = setTimeout(() => alertEl.classList.remove('is-visible'), 4000);
+  }
+}
+
+/* =========================================================
+   BOOKING FORM — AJAX submit přes Formspree, in-page feedback
+   ========================================================= */
+(function initBookingForm() {
+  const form = document.getElementById('bookingForm');
+  const submit = document.getElementById('bookingSubmit');
+  const feedback = document.getElementById('formFeedback');
+  if (!form || !submit || !feedback) return;
+
+  function showFeedback(type, message) {
+    feedback.className = 'form__feedback form__feedback--' + type;
+    feedback.textContent = message;
+    feedback.hidden = false;
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    feedback.hidden = true;
+
+    // 1) Cenová varianta — povinná. Bliknou všechny cenové buňky červeně
+    //    a pod tabulkou se ukáže červený popup. Plus scroll k ceníku.
+    const variantField = document.getElementById('f-variant');
+    if (!variantField || !variantField.value) {
+      flashPricingError();
+      const pricing = document.getElementById('cenik');
+      if (pricing) pricing.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
+    // 2) Pole — nativní HTML5 validace (required atributy)
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    // 3) Čas pronájmu — povinný výběr (busy bloky jsou klikatelné, takže
+     //    uživatel vždycky může něco vybrat — i s warningem).
+    const timeFrom = document.getElementById('f-time-from');
+    const timeTo = document.getElementById('f-time-to');
+    if (!timeFrom.value || !timeTo.value) {
+      showFeedback('error', 'Vyberte prosím čas pronájmu v oddílu „Čas pronájmu".');
+      return;
+    }
+
+    const labelEl = submit.querySelector('.btn-rust__label');
+    const originalLabel = labelEl ? labelEl.textContent : '';
+    if (labelEl) labelEl.textContent = 'Odesílám…';
+    submit.disabled = true;
+
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: { Accept: 'application/json' },
+      });
+      if (res.ok) {
+        showFeedback('success',
+          'Děkujeme — poptávka odeslána. Ozveme se do 24 hodin na váš e-mail.'
+        );
+        form.reset();
+        const variantBox = document.getElementById('bookingVariant');
+        if (variantBox) variantBox.hidden = true;
+        document.querySelectorAll('.price-cell.is-selected').forEach((c) =>
+          c.classList.remove('is-selected')
+        );
+      } else {
+        // Pokus o JSON, fallback na text
+        const text = await res.text();
+        let data; try { data = JSON.parse(text); } catch (_) { data = null; }
+        console.error('Formspree error', res.status, data || text);
+        let msg;
+        if (data && data.errors && data.errors.length) {
+          msg = data.errors.map((e) => e.message || JSON.stringify(e)).join(' ');
+        } else if (data && data.error) {
+          msg = data.error;
+        } else {
+          msg = 'Server vrátil HTTP ' + res.status +
+            '. Otevřete prosím F12 → Console a pošlete mi přesný text chyby, nebo napište na info@studiodilna.cz.';
+        }
+        showFeedback('error', msg);
+      }
+    } catch (_) {
+      showFeedback('error',
+        'Nepodařilo se připojit. Zkontrolujte internet a zkuste to znovu.'
+      );
+    } finally {
+      if (labelEl) labelEl.textContent = originalLabel;
+      submit.disabled = false;
+    }
+  });
+})();
+
+/* =========================================================
+   MAP — Leaflet + Carto Positron, custom rust pin + štítek
+   ========================================================= */
+(function initMap() {
+  const el = document.getElementById('mapCanvas');
+  if (!el || typeof L === 'undefined') return;
+
+  // Studio Dílna — Přístavní 1315/7, Praha 7-Holešovice
+  const COORDS = [50.10266, 14.45046];
+
+  const map = L.map(el, {
+    center: COORDS,
+    zoom: 16,
+    scrollWheelZoom: false,
+    zoomControl: true,
+    attributionControl: true,
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 20,
+  }).addTo(map);
+
+  const pinIcon = L.divIcon({
+    className: 'map-pin',
+    html:
+      '<span class="map-pin__pulse"></span>' +
+      '<span class="map-pin__dot"></span>' +
+      '<span class="map-pin__label">Studio Dílna</span>',
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+  L.marker(COORDS, { icon: pinIcon, keyboard: false, interactive: false }).addTo(map);
+})();
+

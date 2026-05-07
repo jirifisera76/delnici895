@@ -11,7 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=37" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
+  <link rel="stylesheet" href="styles.css?v=62" />
 
   <meta property="og:title" content="Dílna — Industriální kreativní studio v Holešovicích" />
   <meta property="og:description" content="150 m² industriálního kreativního studia v Praze-Holešovicích pro natáčení, focení a produkci." />
@@ -270,25 +271,26 @@
         <tbody>
           <tr data-tier-label="Hodinová sazba">
             <th scope="row">Hodinová sazba</th>
-            <td class="price-cell" data-price="od 1 200 Kč / h" tabindex="0" role="button">od 1 200 Kč / h</td>
-            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
-            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
+            <td class="price-cell" data-price="od 1 200 Kč" tabindex="0" role="button">od 1 200 Kč</td>
+            <td class="price-cell" data-price="od 600 Kč" tabindex="0" role="button">od 600 Kč</td>
+            <td class="price-cell" data-price="od 1 700 Kč" tabindex="0" role="button">od 1 700 Kč</td>
           </tr>
           <tr data-tier-label="Půldenní pronájem (4 h)">
             <th scope="row">Půldenní pronájem<small>4 hodiny</small></th>
             <td class="price-cell" data-price="od 4 200 Kč" tabindex="0" role="button">od 4 200 Kč</td>
-            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
-            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
+            <td class="price-cell" data-price="od 2 200 Kč" tabindex="0" role="button">od 2 200 Kč</td>
+            <td class="price-cell" data-price="od 5 800 Kč" tabindex="0" role="button">od 5 800 Kč</td>
           </tr>
           <tr data-tier-label="Celodenní pronájem (10 h)">
             <th scope="row">Celodenní pronájem<small>10 hodin</small></th>
             <td class="price-cell" data-price="od 8 900 Kč" tabindex="0" role="button">od 8 900 Kč</td>
-            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
-            <td class="price-cell" data-price="—" tabindex="0" role="button">—</td>
+            <td class="price-cell" data-price="od 4 800 Kč" tabindex="0" role="button">od 4 800 Kč</td>
+            <td class="price-cell" data-price="od 12 500 Kč" tabindex="0" role="button">od 12 500 Kč</td>
           </tr>
         </tbody>
       </table>
-      <p class="pricing__note">Klikni na variantu — propíše se do rezervace dole. Ceny jsou orientační, bez DPH.</p>
+      <p class="pricing__note">Ceny jsou orientační, bez DPH. Konkrétní nabídku pošleme po vyplnění formuláře.</p>
+      <div class="pricing__alert" id="pricingAlert">Vyberte prosím cenovou variantu — bez ní nelze odeslat poptávku.</div>
     </div>
   </section>
 
@@ -301,17 +303,22 @@
       </h2>
     </div>
 
-    <div class="booking__layout">
-      <div class="booking__form-col">
-        <div class="booking__variant" id="bookingVariant" hidden>
-          <span class="booking__variant-label">Vybraná varianta</span>
-          <span class="booking__variant-value" id="bookingVariantValue"></span>
-          <span class="booking__variant-price" id="bookingVariantPrice"></span>
-          <button type="button" class="booking__variant-clear" id="bookingVariantClear" aria-label="Zrušit výběr">×</button>
-        </div>
+    <form class="booking-form" id="bookingForm" action="https://formspree.io/f/mlgzwljw" method="POST" novalidate>
+      <input type="hidden" name="varianta" id="f-variant" />
+      <input type="hidden" name="_subject" value="Nová poptávka — Studio Dílna" />
+      <!-- Honeypot proti botům -->
+      <input type="text" name="_gotcha" style="display:none" tabindex="-1" autocomplete="off" />
 
-        <form class="form" action="mailto:ahoj@studiodilna.cz" method="post" enctype="text/plain" novalidate>
-          <input type="hidden" name="varianta" id="f-variant" />
+      <div class="booking__layout">
+        <div class="booking__form-col">
+          <div class="booking__variant" id="bookingVariant" hidden>
+            <span class="booking__variant-label">Vybraná varianta</span>
+            <span class="booking__variant-value" id="bookingVariantValue"></span>
+            <span class="booking__variant-price" id="bookingVariantPrice"></span>
+            <button type="button" class="booking__variant-clear" id="bookingVariantClear" aria-label="Zrušit výběr">×</button>
+          </div>
+
+          <div class="form">
 
           <div class="field">
             <label for="f-name">Jméno</label>
@@ -340,7 +347,7 @@
                 <span class="phone-flag__caret" aria-hidden="true">▾</span>
               </button>
               <ul class="phone-flag__menu" id="phoneFlagMenu" role="listbox" hidden></ul>
-              <input id="f-phone" name="telefon" type="tel" autocomplete="tel" placeholder="123 456 789" />
+              <input id="f-phone" name="telefon" type="tel" autocomplete="tel" placeholder="123 456 789" required />
               <input type="hidden" name="telefon_predvolba" id="f-phone-prefix" value="+420" />
             </div>
           </div>
@@ -348,27 +355,30 @@
           <div class="field">
             <label for="f-date">Datum</label>
             <div class="date-input">
-              <input id="f-date" name="datum" type="date" />
+              <input id="f-date" name="datum" type="date" required />
               <span class="date-input__icon" aria-hidden="true">📅</span>
             </div>
-            <p class="field__warning" id="dateWarning" hidden>
-              Studio je pravděpodobně obsazené. Zašlete nezávaznou poptávku — ozveme se s alternativou.
-            </p>
+          </div>
+
+          <div class="field field--full time-field">
+            <label>Čas pronájmu</label>
+            <div class="time-picker" id="timePicker">
+              <p class="time-picker__hint">Nejdřív vyberte cenu a datum — ukážeme dostupné časy.</p>
+            </div>
+            <input type="hidden" name="cas_od" id="f-time-from" />
+            <input type="hidden" name="cas_do" id="f-time-to" />
+            <input type="hidden" name="cena_celkem" id="f-price-total" />
           </div>
 
           <div class="field field--full">
             <label for="f-msg">Zpráva</label>
             <textarea id="f-msg" name="zprava" rows="4" placeholder="Co plánujete? Délka, počet lidí, technika…"></textarea>
           </div>
+          </div>
+        </div>
 
-          <button class="btn-rust btn-rust--block" type="submit">
-            <span class="btn-rust__label">Rezervovat termín</span>
-          </button>
-        </form>
-      </div>
-
-      <div class="booking__calendar-col">
-        <div class="calendar" id="calendar">
+        <div class="booking__calendar-col">
+          <div class="calendar" id="calendar">
           <div class="calendar__header">
             <button type="button" class="calendar__nav" data-dir="-1" aria-label="Předchozí měsíc">‹</button>
             <h3 class="calendar__title" id="calendarTitle"></h3>
@@ -383,17 +393,37 @@
             <li><span class="calendar__dot calendar__dot--partial"></span>Částečně</li>
             <li><span class="calendar__dot calendar__dot--busy"></span>Obsazeno</li>
           </ul>
-          <p class="calendar__hint" id="calendarHint">Vyber cenu výše — kalendář ti ukáže vytíženost vybraného prostoru.</p>
+            <p class="calendar__hint" id="calendarHint">Vyber cenu výše — kalendář ti ukáže vytíženost vybraného prostoru.</p>
+          </div>
+
+          <div class="booking-form__total" id="formTotal" hidden>
+            <span class="booking-form__total-label">Cena celkem</span>
+            <span class="booking-form__total-detail" id="formTotalDetail"></span>
+            <span class="booking-form__total-price" id="formTotalPrice"></span>
+          </div>
+
+          <button class="btn-rust btn-rust--block booking-form__submit" type="submit" id="bookingSubmit">
+            <span class="btn-rust__label">Rezervovat termín</span>
+          </button>
+          <div class="form__feedback" id="formFeedback" hidden></div>
         </div>
       </div>
-    </div>
+    </form>
+  </section>
+
+  <!-- ===== MAPA ===== -->
+  <section class="map" aria-label="Poloha studia Dílna na mapě">
+    <div class="map__canvas" id="mapCanvas"></div>
+    <a class="map__cta" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener">
+      Otevřít v Google Maps
+    </a>
   </section>
 
   <!-- ===== FOOTER ===== -->
   <footer class="foot">
     <div class="foot__col">
       <span class="foot__label">Kontakt</span>
-      <a href="mailto:ahoj@studiodilna.cz">ahoj@studiodilna.cz</a>
+      <a href="mailto:info@studiodilna.cz">info@studiodilna.cz</a>
     </div>
     <div class="foot__col">
       <span class="foot__label">Adresa</span>
@@ -405,6 +435,8 @@
     </div>
   </footer>
 
-  <script src="script.js?v=41" defer></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous" defer></script>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="script.js?v=63" defer></script>
 </body>
 </html>
