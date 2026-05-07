@@ -514,7 +514,7 @@ if ('IntersectionObserver' in window) {
     const heading = document.querySelector('.booking__heading');
     if (heading) {
       const targetY = heading.getBoundingClientRect().bottom + window.scrollY;
-      smoothScrollToY(targetY, 2200);
+      smoothScrollToY(targetY, 1000);
     }
   }
 
@@ -522,13 +522,25 @@ if ('IntersectionObserver' in window) {
     const startY = window.scrollY;
     const distance = targetY - startY;
     const startTime = performance.now();
-    // Ease-in-out QUINTIC — pomalejší rozjezd a doseděk než cubic, plynulejší
-    const ease = (t) => (t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2);
+    // Ease-out cubic — rychlý rozjezd, jemný doseděk, plynulé ve většině situací
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+
+    // DŮLEŽITÉ: globální `html { scroll-behavior: smooth }` by každý
+    // scrollTo() v RAF smyčce sám animoval → trhání. Vypneme ho na dobu
+    // animace a po skončení vrátíme.
+    const html = document.documentElement;
+    const prevBehavior = html.style.scrollBehavior;
+    html.style.scrollBehavior = 'auto';
+
     function step(now) {
       const elapsed = now - startTime;
       const t = Math.min(1, elapsed / duration);
       window.scrollTo(0, startY + distance * ease(t));
-      if (t < 1) requestAnimationFrame(step);
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        html.style.scrollBehavior = prevBehavior;
+      }
     }
     requestAnimationFrame(step);
   }
