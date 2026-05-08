@@ -65,32 +65,55 @@ window.dilnaLazyLib = (function () {
    stačí přepsat getRawBookings, nic dalšího se měnit nebude.
    ========================================================= */
 window.dilnaAvailability = (function () {
-  const HOURLY_START = 8;
-  const HOURLY_END = 22;
+  const HOURLY_START = 8;     // provozní začátek 8:00
+  const HOURLY_END = 22;      // provozní konec 22:00
+  const SLOT_MIN = 30;        // 30 min granularita
+  const SLOTS_PER_HOUR = 60 / SLOT_MIN; // 2
+  const TOTAL_SLOTS = (HOURLY_END - HOURLY_START) * SLOTS_PER_HOUR; // 28
   const TOTAL_HOURS = HOURLY_END - HOURLY_START;
 
   const SPACE_STUDIO = 'Studio';
   const SPACE_PODCAST = 'Podcastová / konferenční místnost';
   const SPACE_WHOLE = 'Celé studio';
-  const SPACES = [SPACE_STUDIO, SPACE_PODCAST, SPACE_WHOLE];
 
-  function hashCode(s) {
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-    return Math.abs(h);
-  }
+  // Google Sheets CSV endpoint — publikovaný "Comma-separated values" sheet.
+  // Aneta upravuje sheet, web pulluje data každých 5 minut + při návratu na tab.
+  const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT_r8X0goY7mPPYb2QYyuHn4Gk7_UjQNLsqEiktDvaUnv_GNxG-_iXvoWh582qteY6wlvhupDpaUCN_/pub?output=csv';
+  const CACHE_KEY = 'dilna-bookings-v2';
+  const CACHE_TTL_MS = 5 * 60 * 1000;
+
+  // bookingsByDate: Map<"YYYY-MM-DD", [{ space, hours: [int, int, ...] }]>
+  let bookingsByDate = new Map();
+  let isLoaded = false;
+
   function isClosedDay(dateISO) {
-    if (!dateISO) return false;
-    const d = new Date(dateISO + 'T00:00:00');
-    return d.getDay() === 0; // neděle = zavřeno
+    return false;
   }
-  function allHoursArray() {
+  function allSlotsArray() {
     const a = [];
-    for (let h = HOURLY_START; h < HOURLY_END; h++) a.push(h);
+    for (let s = 0; s < TOTAL_SLOTS; s++) a.push(s);
     return a;
   }
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+  // "HH:MM" → slot index (0 = HOURLY_START), null pokud mimo rozsah
+  function timeToSlot(t) {
+    if (!t) return null;
+    const parts = String(t).split(':');
+    const hh = parseInt(parts[0], 10);
+    const mm = parseInt(parts[1] || '0', 10);
+    if (isNaN(hh) || isNaN(mm)) return null;
+    if (hh < HOURLY_START || hh > HOURLY_END) return null;
+    if (hh === HOURLY_END && mm > 0) return null;
+    return (hh - HOURLY_START) * SLOTS_PER_HOUR + Math.floor(mm / SLOT_MIN);
+  }
+  function slotToTime(slot) {
+    const total = HOURLY_START * SLOTS_PER_HOUR + slot;
+    const hh = Math.floor(total / SLOTS_PER_HOUR);
+    const mm = (total % SLOTS_PER_HOUR) * SLOT_MIN;
+    return pad2(hh) + ':' + pad2(mm);
+  }
 
-  // Rezervace daného prostoru blokuje dotazovaný prostor?
+  // Hierarchická logika: rezervace daného prostoru blokuje dotazovaný prostor?
   function conflicts(bookedSpace, querySpace) {
     if (bookedSpace === querySpace) return true;
     if (bookedSpace === SPACE_WHOLE) return true;   // celé blokuje vše
@@ -98,51 +121,152 @@ window.dilnaAvailability = (function () {
     return false; // Studio ↔ Podcastová jsou nezávislé
   }
 
-  // Mock raw rezervací — později nahradíme fetchem z Google Sheets.
-  // Vrátí pole { space, hours } pro daný den.
+  // ===== CSV parser (handles quoted fields s embedded čárkou) =====
+  function parseCsvLine(line) {
+    const out = [];
+    let cur = '';
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (c === ',' && !inQ) {
+        out.push(cur); cur = '';
+      } else {
+        cur += c;
+      }
+    }
+    out.push(cur);
+    return out.map((s) => s.trim());
+  }
+  function parseCSV(text) {
+    const lines = text.replace(/﻿/, '').trim().split(/\r?\n/);
+    if (!lines.length) return [];
+    const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase());
+    return lines.slice(1).map((line) => {
+      const values = parseCsvLine(line);
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = values[i] || ''; });
+      return obj;
+    });
+  }
+
+  // Google Sheets autokorektil pomlčky na en-dash / em-dash. Normalizujeme.
+  function normDash(s) {
+    return s.replace(/[‐-―−]/g, '-');
+  }
+
+  // ===== Row → bookings transformace (slot-based, 30 min granularita) =====
+  function rowsToBookings(rows) {
+    const map = new Map();
+    rows.forEach((row) => {
+      const date = normDash((row.datum || '').trim());
+      const space = (row.prostor || '').trim();
+      const od = (row.od || '').trim();
+      const doStr = (row['do'] || '').trim();
+      if (!date || !space || !od || !doStr) return;
+      const fromSlot = timeToSlot(od);
+      const toSlot = timeToSlot(doStr);
+      if (fromSlot == null || toSlot == null || toSlot <= fromSlot) return;
+      const slots = [];
+      for (let s = fromSlot; s < toSlot; s++) slots.push(s);
+      if (!map.has(date)) map.set(date, []);
+      map.get(date).push({ space, slots });
+    });
+    return map;
+  }
+
+  // ===== Cache (localStorage, 5min TTL) =====
+  function readCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (Date.now() - data.timestamp > CACHE_TTL_MS) return null;
+      return new Map(data.entries);
+    } catch (_) { return null; }
+  }
+  function writeCache(map) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        entries: Array.from(map.entries()),
+      }));
+    } catch (_) {}
+  }
+
+  // ===== Hlavní loader =====
+  async function loadFromSheet() {
+    // Cache hit
+    const cached = readCache();
+    if (cached) {
+      bookingsByDate = cached;
+      isLoaded = true;
+      document.dispatchEvent(new CustomEvent('availability:loaded'));
+    }
+    // Vždy zkusíme fresh fetch, i když máme cache (background refresh)
+    try {
+      const res = await fetch(SHEET_CSV_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const rows = parseCSV(text);
+      bookingsByDate = rowsToBookings(rows);
+      isLoaded = true;
+      writeCache(bookingsByDate);
+      document.dispatchEvent(new CustomEvent('availability:loaded'));
+    } catch (err) {
+      console.warn('Sheet load failed:', err);
+      // Pokud nemáme ani cache, zůstává prázdné → dny se ukáží jako volné
+    }
+  }
+
   function getRawBookings(dateISO) {
     if (!dateISO) return [];
     if (isClosedDay(dateISO)) {
-      return [{ space: SPACE_WHOLE, hours: allHoursArray() }];
+      return [{ space: SPACE_WHOLE, slots: allSlotsArray() }];
     }
-    const seed = hashCode(dateISO);
-    const numBookings = seed % 3; // 0–2 rezervace denně
-    const bookings = [];
-    for (let i = 0; i < numBookings; i++) {
-      const sp = SPACES[(seed >> (i * 5)) % 3];
-      const startH = HOURLY_START + (((seed >> (i * 7)) & 0xff) % (TOTAL_HOURS - 1));
-      const len = 1 + (((seed >> (i * 3)) & 0x3) % 4); // 1–4 hodiny
-      const endH = Math.min(HOURLY_END, startH + len);
-      const hours = [];
-      for (let h = startH; h < endH; h++) hours.push(h);
-      bookings.push({ space: sp, hours });
-    }
-    return bookings;
+    return bookingsByDate.get(dateISO) || [];
   }
 
-  function getBusyHours(dateISO, space) {
+  function getBusySlots(dateISO, space) {
     if (!dateISO || !space) return new Set();
     const busy = new Set();
     for (const b of getRawBookings(dateISO)) {
-      if (conflicts(b.space, space)) b.hours.forEach((h) => busy.add(h));
+      if (conflicts(b.space, space)) b.slots.forEach((s) => busy.add(s));
     }
     return busy;
   }
 
   function getDayStatus(dateISO, space) {
     if (isClosedDay(dateISO)) return 'busy';
-    const busy = getBusyHours(dateISO, space);
+    const busy = getBusySlots(dateISO, space);
     if (busy.size === 0) return 'free';
-    if (busy.size >= TOTAL_HOURS) return 'busy';
+    if (busy.size >= TOTAL_SLOTS) return 'busy';
     return 'partial';
   }
 
+  // Initial load + auto-refresh
+  loadFromSheet();
+  setInterval(loadFromSheet, CACHE_TTL_MS);
+  // Refresh při návratu na tab (ať vidíš nejnovější data hned)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') loadFromSheet();
+  });
+
   return {
-    getBusyHours,
+    getBusySlots,
     getDayStatus,
     getRawBookings,
+    loadFromSheet,
+    isLoaded: () => isLoaded,
     HOURLY_START,
     HOURLY_END,
+    SLOT_MIN,
+    SLOTS_PER_HOUR,
+    TOTAL_SLOTS,
+    timeToSlot,
+    slotToTime,
     SPACES: { STUDIO: SPACE_STUDIO, PODCAST: SPACE_PODCAST, WHOLE: SPACE_WHOLE },
   };
 })();
@@ -932,6 +1056,8 @@ if ('IntersectionObserver' in window) {
     pickedISO = null;
     render();
   });
+  // Sheet data dorazila → re-render kalendáře s reálnými daty
+  document.addEventListener('availability:loaded', render);
 
   render();
 })();
@@ -1003,6 +1129,42 @@ if ('IntersectionObserver' in window) {
       accept();
     }
   });
+})();
+
+/* =========================================================
+   FORM LOCK — formulář vlevo zšedne, dokud uživatel nevybere cenu
+   v ceníku A datum v kalendáři. Po splnění se odemkne pro vyplnění.
+   ========================================================= */
+(function initFormLock() {
+  const formCol = document.querySelector('.booking__form-col');
+  const dateInput = document.getElementById('f-date');
+  const calendar = document.getElementById('calendar');
+  const lockBtn = document.getElementById('calendarLockBtn');
+  if (!formCol || !dateInput) return;
+
+  let hasTier = false;
+  let hasDate = !!dateInput.value;
+
+  function update() {
+    formCol.classList.toggle('is-locked', !hasTier || !hasDate);
+    if (calendar) calendar.classList.toggle('is-locked', !hasTier);
+  }
+  update();
+
+  // Klik na lock overlay → odroluj k ceníku
+  if (lockBtn) {
+    lockBtn.addEventListener('click', () => {
+      const pricing = document.getElementById('cenik');
+      if (pricing) pricing.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  document.addEventListener('variant:select', () => { hasTier = true; update(); });
+  document.addEventListener('variant:clear', () => { hasTier = false; update(); });
+  const onDate = () => { hasDate = !!dateInput.value; update(); };
+  dateInput.addEventListener('change', onDate);
+  dateInput.addEventListener('input', onDate);
+  document.addEventListener('booking:reset', () => { hasTier = false; hasDate = false; update(); });
 })();
 
 /* =========================================================
@@ -1262,33 +1424,50 @@ function initTour() {
   // Cenová matice — base ceny per (space, tier).
   // Klíče sedí na data-space-label v <th> a data-tier-label v <tr>.
   const PRICING = {
-    'Studio': { hourly: 1200, halfday: 4200, fullday: 8900 },
-    'Podcastová / konferenční místnost': { hourly: 600, halfday: 2200, fullday: 4800 },
-    'Celé studio': { hourly: 1700, halfday: 5800, fullday: 12500 },
+    'Studio': { hourly: 1200, mini: 4300, halfday: 7000, fullday: 11300 },
+    'Podcastová / konferenční místnost': { hourly: 600, mini: 2160, halfday: 3500, fullday: 5600 },
+    'Celé studio': { hourly: 1700, mini: 6100, halfday: 9900, fullday: 15900 },
   };
-  const HOURLY_START = 8;     // první možný start
-  const HOURLY_END = 22;      // poslední možný end (slot 21:00 = poslední startovací)
-  const HALF_DAY_OPTIONS = [
-    { label: 'Dopoledne', from: '09:00', to: '13:00', hours: [9, 10, 11, 12] },
-    { label: 'Odpoledne', from: '14:00', to: '18:00', hours: [14, 15, 16, 17] },
-    { label: 'Večer',     from: '18:00', to: '22:00', hours: [18, 19, 20, 21] },
-  ];
-  const FULL_DAY = { from: '09:00', to: '19:00', hours: Array.from({ length: 10 }, (_, i) => 9 + i) };
+  // Slot-based: 30min granularita, provozní doba 8:00–22:00 = 28 slotů.
+  // Slot 0 = 8:00, slot 1 = 8:30, ..., slot 27 = 21:30. End time slotu = (slot+1).
+  const HOURLY_START = 8;
+  const HOURLY_END = 22;
+  const SLOT_MIN = 30;
+  const SLOTS_PER_HOUR = 60 / SLOT_MIN;
+  const TOTAL_SLOTS = (HOURLY_END - HOURLY_START) * SLOTS_PER_HOUR; // 28
 
-  // Stav
+  // Půldenní bloky 7 h = 14 slotů. Dva kontinuální bloky pokryjí celých 8:00–22:00.
+  const HALF_DAY_OPTIONS = [
+    { label: 'Dopoledne', fromSlot: 0,  toSlot: 14 }, // 8:00–15:00
+    { label: 'Odpoledne', fromSlot: 14, toSlot: 28 }, // 15:00–22:00
+  ];
+  // Mini blok 4 h = 8 slotů. Tři neoverlapující bloky.
+  const MINI_OPTIONS = [
+    { label: 'Ráno',      fromSlot: 0,  toSlot: 8 },  // 8:00–12:00
+    { label: 'Odpoledne', fromSlot: 10, toSlot: 18 }, // 13:00–17:00
+    { label: 'Večer',     fromSlot: 20, toSlot: 28 }, // 18:00–22:00
+  ];
+  // Celý den 14 h = 28 slotů, 8:00–22:00.
+  const FULL_DAY = { fromSlot: 0, toSlot: 28 };
+
+  // Stav (pickStart/pickEnd jsou SLOT indexy, ne hodiny!)
   let space = null;
   let tier = null;
   let dateISO = null;
-  let pickStart = null; // hour number
-  let pickEnd = null;   // hour number (exclusive, e.g. start=14, end=18 → 4 hours)
+  let pickStart = null;
+  let pickEnd = null;   // exkluzivní
 
-  // Sdílený zdroj — stejné busy hodiny vidí kalendář i time picker
-  function getBusyHours(d, sp) {
-    return window.dilnaAvailability.getBusyHours(d, sp);
+  function getBusySlots(d, sp) {
+    return window.dilnaAvailability.getBusySlots(d, sp);
   }
 
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
-  function hourLabel(h) { return pad(h) + ':00'; }
+  function slotToTime(slot) {
+    const total = HOURLY_START * SLOTS_PER_HOUR + slot;
+    const hh = Math.floor(total / SLOTS_PER_HOUR);
+    const mm = (total % SLOTS_PER_HOUR) * SLOT_MIN;
+    return pad(hh) + ':' + pad(mm);
+  }
 
   function clearPicked() {
     pickStart = null; pickEnd = null;
@@ -1298,6 +1477,7 @@ function initTour() {
   function tierKey() {
     if (!tier) return null;
     if (tier === 'Hodinová sazba') return 'hourly';
+    if (tier.startsWith('Mini')) return 'mini';
     if (tier.startsWith('Půldenní')) return 'halfday';
     if (tier.startsWith('Celodenní')) return 'fullday';
     return null;
@@ -1308,7 +1488,7 @@ function initTour() {
     return (PRICING[space] && PRICING[space][k]) || 0;
   }
 
-  // Total box je mimo time picker — nad submit tlačítkem
+  // Total box (sdílený mezi time pickerem + overtime — viz window.dilnaTotal)
   const totalBox = document.getElementById('formTotal');
   const totalDetail = document.getElementById('formTotalDetail');
   const totalPrice = document.getElementById('formTotalPrice');
@@ -1316,22 +1496,45 @@ function initTour() {
   const totalGrand = document.getElementById('formTotalGrand');
   const VAT_RATE = 0.21;
 
-  function fmt(n) {
-    // Zaokrouhlujeme na celé koruny, ať to nevypadá hloupě s halíři
-    return Math.round(n).toLocaleString('cs-CZ') + ' Kč';
+  function fmt(n) { return Math.round(n).toLocaleString('cs-CZ') + ' Kč'; }
+
+  // Globální stav celkové ceny — time picker zapisuje base, overtime IIFE addon.
+  if (!window.dilnaTotal) {
+    window.dilnaTotal = {
+      base: 0, baseDetail: '',
+      overtime: 0, overtimeDetail: '',
+      render() {
+        if (!totalBox) return;
+        const sum = this.base + this.overtime;
+        if (sum === 0) { totalBox.hidden = true; return; }
+        const vat = sum * VAT_RATE;
+        const grand = sum + vat;
+        if (totalDetail) {
+          // baseDetail i overtimeDetail jsou HTML stringy se strukturou
+          // <span class="row">...</span>; render je staví pod sebe.
+          let html = this.baseDetail || '';
+          if (this.overtime > 0 && this.overtimeDetail) {
+            html += this.overtimeDetail;
+          }
+          totalDetail.innerHTML = html;
+        }
+        if (totalPrice) totalPrice.textContent = fmt(sum);
+        if (totalVat) totalVat.textContent = fmt(vat);
+        if (totalGrand) totalGrand.textContent = fmt(grand);
+        totalBox.hidden = false;
+      },
+    };
   }
+
   function showTotal(detail, total) {
-    if (!totalBox) return;
-    const vat = total * VAT_RATE;
-    const grand = total + vat;
-    if (totalDetail) totalDetail.textContent = detail;
-    if (totalPrice) totalPrice.textContent = fmt(total);
-    if (totalVat) totalVat.textContent = fmt(vat);
-    if (totalGrand) totalGrand.textContent = fmt(grand);
-    totalBox.hidden = false;
+    window.dilnaTotal.base = total;
+    window.dilnaTotal.baseDetail = detail;
+    window.dilnaTotal.render();
   }
   function hideTotal() {
-    if (totalBox) totalBox.hidden = true;
+    window.dilnaTotal.base = 0;
+    window.dilnaTotal.baseDetail = '';
+    window.dilnaTotal.render();
   }
 
   function render() {
@@ -1348,9 +1551,10 @@ function initTour() {
       hideTotal();
       return;
     }
-    const busy = getBusyHours(dateISO, space);
+    const busy = getBusySlots(dateISO, space);
     const k = tierKey();
     if (k === 'hourly') renderHourly(busy);
+    else if (k === 'mini') renderMini(busy);
     else if (k === 'halfday') renderHalfDay(busy);
     else if (k === 'fullday') renderFullDay(busy);
   }
@@ -1358,22 +1562,57 @@ function initTour() {
   function renderHourly(busy) {
     const row = document.createElement('div');
     row.className = 'time-picker__row';
-    for (let h = HOURLY_START; h < HOURLY_END; h++) {
+    // Renderujeme TOTAL_SLOTS + 1 časových BODŮ (8:00 .. 22:00 = 29 tlačítek).
+    // Každé tlačítko = jeden okamžik. Klik na "9:00" znamená opravdu 9:00,
+    // ne "slot začínající v 9:00" jak to bylo dřív.
+    for (let p = 0; p <= TOTAL_SLOTS; p++) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'time-slot';
-      btn.dataset.hour = String(h);
-      btn.textContent = hourLabel(h);
-      const isBusy = busy.has(h);
-      if (isBusy) btn.classList.add('time-slot--busy');
+      btn.dataset.point = String(p);
+      btn.textContent = slotToTime(p);
+
+      // Selected/in-range podle bodů. pickStart i pickEnd jsou point indexy.
       if (pickStart !== null && pickEnd !== null) {
-        if (h >= pickStart && h < pickEnd) btn.classList.add('time-slot--in-range');
-        if (h === pickStart) btn.classList.add('time-slot--selected');
-        if (h === pickEnd - 1) btn.classList.add('time-slot--selected');
-      } else if (pickStart !== null && h === pickStart) {
+        if (p === pickStart || p === pickEnd) btn.classList.add('time-slot--selected');
+        else if (p > pickStart && p < pickEnd) btn.classList.add('time-slot--in-range');
+      } else if (pickStart !== null && p === pickStart) {
         btn.classList.add('time-slot--selected');
       }
-      if (!isBusy) btn.addEventListener('click', () => onHourClick(h, busy));
+
+      // Bod je nepoužitelný, jen pokud jsou oba sousední sloty obsazené (nebo neexistují).
+      let unusable;
+      if (p === 0) unusable = busy.has(0);
+      else if (p === TOTAL_SLOTS) unusable = busy.has(TOTAL_SLOTS - 1);
+      else unusable = busy.has(p - 1) && busy.has(p);
+
+      // Body, které by daly zakázanou délku rezervace (0,5 h nebo 1,5 h),
+      // se zobrazí jako disabled — zšednou a po hoveru ukážou důvod.
+      let invalidDuration = false;
+      if (!unusable && pickStart !== null && p !== pickStart) {
+        if (pickEnd === null && p > pickStart) {
+          const slots = p - pickStart;
+          if (slots === 1 || slots === 3) invalidDuration = true;
+        } else if (pickEnd !== null) {
+          if (p > pickEnd) {
+            const slots = p - pickStart;
+            if (slots === 1 || slots === 3) invalidDuration = true;
+          } else if (p < pickStart) {
+            const slots = pickEnd - p;
+            if (slots === 1 || slots === 3) invalidDuration = true;
+          }
+        }
+      }
+
+      if (unusable) {
+        btn.classList.add('time-slot--busy');
+      } else if (invalidDuration) {
+        btn.classList.add('time-slot--disabled');
+        btn.setAttribute('title', 'Min. 1 h, od 2 h prodlužujete po půl hodině.');
+      } else {
+        btn.addEventListener('click', () => onSlotClick(p, busy));
+      }
+
       row.appendChild(btn);
     }
     root.appendChild(row);
@@ -1387,54 +1626,146 @@ function initTour() {
     root.appendChild(legend);
 
     if (pickStart !== null && pickEnd !== null) {
-      const hours = pickEnd - pickStart;
-      const total = hours * basePrice();
-      const detail = `${hourLabel(pickStart)}–${hourLabel(pickEnd)} · ${hours} h × ${basePrice().toLocaleString('cs-CZ')} Kč`;
+      // Účtuje se po půlhodinových slotech: každý slot = polovina hodinové sazby.
+      // Tím vychází: 1 h = rate, 2 h = 2× rate, 2,5 h = 2,5× rate, 3 h = 3× rate, …
+      const slots = pickEnd - pickStart;
+      const total = slots * (basePrice() / 2);
+      const fromT = slotToTime(pickStart);
+      const toT = slotToTime(pickEnd);
+      const realH = (slots * 0.5).toLocaleString('cs-CZ', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+      const detail =
+        `<span class="total-row total-row--time">${fromT}–${toT}</span>` +
+        `<span class="total-row">${realH} h × ${basePrice().toLocaleString('cs-CZ')} Kč/h</span>`;
       showTotal(detail, total);
-      writeForm(hourLabel(pickStart), hourLabel(pickEnd), total);
+      writeForm(fromT, toT, total);
     } else {
       hideTotal();
       const hint = document.createElement('p');
       hint.className = 'time-picker__hint';
       hint.textContent = pickStart === null
-        ? 'Klikněte na hodinu začátku.'
-        : `Začátek ${hourLabel(pickStart)}. Klikněte na hodinu konce.`;
+        ? 'Klikněte na čas začátku. Min. 1 h, od 2 h prodlužujete po půl hodině.'
+        : `Začátek ${slotToTime(pickStart)}. Klikněte na čas konce — dalšími kliky můžete prodlužovat.`;
       root.appendChild(hint);
     }
   }
 
-  function onHourClick(h, busy) {
-    if (pickStart === null || (pickStart !== null && pickEnd !== null)) {
-      // začínáme nový výběr
-      pickStart = h;
-      pickEnd = null;
-    } else {
-      // máme start, klikáme end
-      let end;
-      if (h <= pickStart) {
-        // klik dřív/stejně → swap a end = old_start + 1
-        const newStart = h;
-        end = pickStart + 1;
-        pickStart = newStart;
-      } else {
-        end = h + 1; // exkluzivní, vybraná hodina je poslední vč.
-      }
-      // nesmí přejít přes busy hodinu
-      let blocked = false;
-      for (let x = pickStart; x < end; x++) if (busy.has(x)) { blocked = true; break; }
-      if (blocked) {
-        // ukaž jen start, zruš end
-        pickStart = h;
-        pickEnd = null;
-      } else {
-        pickEnd = end;
-      }
+  // Povolené délky: 2 sloty (1 h), 4 sloty (2 h), 5+ slotů (2,5 h+ po 30 min).
+  // Neplatné 1 (0,5 h) a 3 (1,5 h) → zaokrouhlíme nahoru na další povolenou.
+  function snapSlots(n) {
+    if (n < 2) return 2;
+    if (n === 3) return 4;
+    return n;
+  }
+  function rangeValid(from, to, busy) {
+    if (from < 0 || to > TOTAL_SLOTS) return false;
+    for (let x = from; x < to; x++) if (busy.has(x)) return false;
+    return true;
+  }
+
+  // p = časový bod (0 = 8:00, 28 = 22:00). pickStart/pickEnd jsou point indexy.
+  function onSlotClick(p, busy) {
+    // Bod ve dvou posledních pozicích (21:30, 22:00) nemůže být start
+    // — nezbývá 1 h k dispozici.
+    const canStart = (idx) => idx <= TOTAL_SLOTS - 2;
+
+    // Nic vybráno → nastav start.
+    if (pickStart === null) {
+      if (!canStart(p)) return;
+      pickStart = p; pickEnd = null;
+      render();
+      return;
     }
+
+    // Máme jen start → druhý klik = konec.
+    if (pickEnd === null) {
+      if (p <= pickStart) {
+        if (!canStart(p)) return;
+        pickStart = p; pickEnd = null;
+        render();
+        return;
+      }
+      const slots = snapSlots(p - pickStart);
+      const newEnd = pickStart + slots;
+      if (rangeValid(pickStart, newEnd, busy)) pickEnd = newEnd;
+      else if (canStart(p)) { pickStart = p; pickEnd = null; }
+      render();
+      return;
+    }
+
+    // Range existuje. Klik za stávajícím koncem → prodlouž.
+    if (p > pickEnd) {
+      const slots = snapSlots(p - pickStart);
+      const newEnd = pickStart + slots;
+      if (rangeValid(pickStart, newEnd, busy)) pickEnd = newEnd;
+      render();
+      return;
+    }
+
+    // Klik před začátkem → prodlouž start dozadu.
+    if (p < pickStart) {
+      const slots = snapSlots(pickEnd - p);
+      const newStart = pickEnd - slots;
+      if (rangeValid(newStart, pickEnd, busy)) pickStart = newStart;
+      render();
+      return;
+    }
+
+    // Klik dovnitř → reset, nový start.
+    if (!canStart(p)) return;
+    pickStart = p; pickEnd = null;
     render();
   }
 
   // Sjednocená warning hláška pro busy bloky (půldenní i celodenní)
   const BUSY_WARNING = 'Tento termín je částečně obsazený. Pošlete nezávaznou poptávku — ozveme se vám s možnostmi.';
+
+  function blockHasBusy(fromSlot, toSlot, busy) {
+    for (let s = fromSlot; s < toSlot; s++) if (busy.has(s)) return true;
+    return false;
+  }
+
+  function renderMini(busy) {
+    const row = document.createElement('div');
+    row.className = 'time-picker__row';
+    MINI_OPTIONS.forEach((opt) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'time-slot time-slot--block';
+      const fromT = slotToTime(opt.fromSlot);
+      const toT = slotToTime(opt.toSlot);
+      const isBusy = blockHasBusy(opt.fromSlot, opt.toSlot, busy);
+      btn.innerHTML = `${opt.label}<span class="time-slot__sub">${fromT}–${toT} · 4 h</span>`;
+      if (isBusy) btn.classList.add('time-slot--busy');
+      if (pickStart === opt.fromSlot && pickEnd === opt.toSlot) btn.classList.add('time-slot--selected');
+      btn.addEventListener('click', () => {
+        pickStart = opt.fromSlot;
+        pickEnd = opt.toSlot;
+        render();
+      });
+      row.appendChild(btn);
+    });
+    root.appendChild(row);
+
+    let pickedIsBusy = false;
+    if (pickStart !== null) {
+      pickedIsBusy = blockHasBusy(pickStart, pickEnd, busy);
+    }
+    if (pickedIsBusy) appendBusyWarning();
+
+    if (pickStart !== null) {
+      const detail =
+        `<span class="total-row total-row--time">${slotToTime(pickStart)}–${slotToTime(pickEnd)}</span>` +
+        `<span class="total-row">Mini blok · 4 h</span>`;
+      showTotal(detail, basePrice());
+      writeForm(slotToTime(pickStart), slotToTime(pickEnd), basePrice());
+    } else {
+      hideTotal();
+      const hint = document.createElement('p');
+      hint.className = 'time-picker__hint';
+      hint.textContent = 'Vyber Ráno (8–12), Odpoledne (13–17) nebo Večer (18–22) — 4 h.';
+      root.appendChild(hint);
+    }
+  }
 
   function renderHalfDay(busy) {
     const row = document.createElement('div');
@@ -1443,69 +1774,68 @@ function initTour() {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'time-slot time-slot--block';
-      const isBusy = opt.hours.some((h) => busy.has(h));
-      btn.innerHTML = `${opt.label}<span class="time-slot__sub">${opt.from}–${opt.to}</span>`;
+      const fromT = slotToTime(opt.fromSlot);
+      const toT = slotToTime(opt.toSlot);
+      const isBusy = blockHasBusy(opt.fromSlot, opt.toSlot, busy);
+      btn.innerHTML = `${opt.label}<span class="time-slot__sub">${fromT}–${toT} · 7 h</span>`;
       if (isBusy) btn.classList.add('time-slot--busy');
-      const fromH = parseInt(opt.from, 10);
-      const toH = parseInt(opt.to, 10);
-      if (pickStart === fromH && pickEnd === toH) btn.classList.add('time-slot--selected');
-      // Vždy klikatelné — i busy. Po kliku ukážeme warning.
+      if (pickStart === opt.fromSlot && pickEnd === opt.toSlot) btn.classList.add('time-slot--selected');
       btn.addEventListener('click', () => {
-        pickStart = fromH;
-        pickEnd = toH;
+        pickStart = opt.fromSlot;
+        pickEnd = opt.toSlot;
         render();
       });
       row.appendChild(btn);
     });
     root.appendChild(row);
 
-    // Vybraný blok je busy? Ukaž warning
     let pickedIsBusy = false;
     if (pickStart !== null) {
-      const pickedOpt = HALF_DAY_OPTIONS.find((opt) => parseInt(opt.from, 10) === pickStart);
-      pickedIsBusy = pickedOpt && pickedOpt.hours.some((h) => busy.has(h));
+      pickedIsBusy = blockHasBusy(pickStart, pickEnd, busy);
     }
     if (pickedIsBusy) appendBusyWarning();
 
     if (pickStart !== null) {
-      const detail = `Půldenní paušál · ${hourLabel(pickStart)}–${hourLabel(pickEnd)}`;
+      const detail =
+        `<span class="total-row total-row--time">${slotToTime(pickStart)}–${slotToTime(pickEnd)}</span>` +
+        `<span class="total-row">Půldenní paušál · 7 h</span>`;
       showTotal(detail, basePrice());
-      writeForm(hourLabel(pickStart), hourLabel(pickEnd), basePrice());
+      writeForm(slotToTime(pickStart), slotToTime(pickEnd), basePrice());
     } else {
       hideTotal();
       const hint = document.createElement('p');
       hint.className = 'time-picker__hint';
-      hint.textContent = 'Vyberte jeden ze tří 4hodinových bloků.';
+      hint.textContent = 'Vyberte Dopoledne (8–15) nebo Odpoledne (15–22) — 7 h.';
       root.appendChild(hint);
     }
   }
 
   function renderFullDay(busy) {
-    const fromH = parseInt(FULL_DAY.from, 10);
-    const toH = parseInt(FULL_DAY.to, 10);
-    const isBusy = FULL_DAY.hours.some((h) => busy.has(h));
+    const fromSlot = FULL_DAY.fromSlot;
+    const toSlot = FULL_DAY.toSlot;
+    const isBusy = blockHasBusy(fromSlot, toSlot, busy);
     const row = document.createElement('div');
     row.className = 'time-picker__row';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'time-slot time-slot--block';
-    btn.innerHTML = `Celý den<span class="time-slot__sub">${FULL_DAY.from}–${FULL_DAY.to} · 10 h</span>`;
+    btn.innerHTML = `Celý den<span class="time-slot__sub">${slotToTime(fromSlot)}–${slotToTime(toSlot)} · 14 h</span>`;
     if (isBusy) btn.classList.add('time-slot--busy');
-    if (pickStart === fromH && pickEnd === toH) btn.classList.add('time-slot--selected');
-    // Vždy klikatelné — i busy
+    if (pickStart === fromSlot && pickEnd === toSlot) btn.classList.add('time-slot--selected');
     btn.addEventListener('click', () => {
-      pickStart = fromH; pickEnd = toH; render();
+      pickStart = fromSlot; pickEnd = toSlot; render();
     });
     row.appendChild(btn);
     root.appendChild(row);
 
-    // Warning když je vybráno + busy
     if (isBusy && pickStart !== null) appendBusyWarning();
 
     if (pickStart !== null) {
-      const detail = `Celodenní paušál · ${hourLabel(pickStart)}–${hourLabel(pickEnd)}`;
+      const detail =
+        `<span class="total-row total-row--time">${slotToTime(pickStart)}–${slotToTime(pickEnd)}</span>` +
+        `<span class="total-row">Celodenní paušál · 14 h</span>`;
       showTotal(detail, basePrice());
-      writeForm(hourLabel(pickStart), hourLabel(pickEnd), basePrice());
+      writeForm(slotToTime(pickStart), slotToTime(pickEnd), basePrice());
     } else {
       hideTotal();
     }
@@ -1560,6 +1890,9 @@ function initTour() {
     dateInput.addEventListener('input', onDate);
   }
 
+  // Sheet data dorazila → re-render aktuálních slotů s reálnou vytížeností
+  document.addEventListener('availability:loaded', render);
+
   render();
 })();
 
@@ -1600,6 +1933,184 @@ function flashPricingError() {
     alertEl._hideT = setTimeout(() => alertEl.classList.remove('is-visible'), 4000);
   }
 }
+
+/* =========================================================
+   OVERTIME — pronájem mimo provozní dobu (+50 % hodinové sazby)
+   ========================================================= */
+(function initOvertime() {
+  const checkbox = document.getElementById('f-overtime-enabled');
+  const detail = document.getElementById('overtimeDetail');
+  const fromInput = document.getElementById('f-overtime-from');
+  const toInput = document.getElementById('f-overtime-to');
+  const rateLabel = document.getElementById('overtimeRate');
+  const calcLabel = document.getElementById('overtimeCalc');
+  const fromBtn = document.getElementById('otFromBtn');
+  const fromValueEl = document.getElementById('otFromValue');
+  const fromMenu = document.getElementById('otFromMenu');
+  const toBtn = document.getElementById('otToBtn');
+  const toValueEl = document.getElementById('otToValue');
+  const toMenu = document.getElementById('otToMenu');
+  if (!checkbox || !detail || !fromInput || !toInput || !rateLabel || !calcLabel) return;
+  if (!fromBtn || !toBtn || !fromMenu || !toMenu) return;
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  // Přesčas-times: pouze mimo provozní dobu (8:00–22:00).
+  // Tedy 22:00, 22:30, … 23:30, 00:00, 00:30, … 06:30, 07:00.
+  // Generujeme posloupností v minutách s wrap přes půlnoc (start = 22:00, end = 07:00 + 24 h).
+  function buildOvertimeOptions() {
+    const opts = [];
+    const startMin = 22 * 60;          // 22:00
+    const endMin = 7 * 60 + 24 * 60;   // 07:00 následující den
+    for (let m = startMin; m <= endMin; m += 30) {
+      const hh = Math.floor((m / 60) % 24);
+      const mm = m % 60;
+      opts.push(pad2(hh) + ':' + pad2(mm));
+    }
+    return opts;
+  }
+
+  function setupTimePop({ btn, valueEl, menuEl, hiddenInput, onChange }) {
+    buildOvertimeOptions().forEach((v) => {
+      const opt = document.createElement('button');
+      opt.type = 'button';
+      opt.className = 'time-pop__opt';
+      opt.dataset.value = v;
+      opt.setAttribute('role', 'option');
+      opt.textContent = v;
+      opt.addEventListener('click', () => { select(v); close(); });
+      menuEl.appendChild(opt);
+    });
+    function select(v) {
+      valueEl.textContent = v;
+      hiddenInput.value = v;
+      menuEl.querySelectorAll('.time-pop__opt').forEach((o) =>
+        o.classList.toggle('is-selected', o.dataset.value === v)
+      );
+      onChange();
+    }
+    function clear() {
+      valueEl.textContent = '—:—';
+      hiddenInput.value = '';
+      menuEl.querySelectorAll('.is-selected').forEach((o) => o.classList.remove('is-selected'));
+    }
+    function open() {
+      menuEl.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      const sel = menuEl.querySelector('.is-selected') || menuEl.querySelector('.is-after-hours');
+      if (sel) sel.scrollIntoView({ block: 'center' });
+    }
+    function close() {
+      menuEl.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (menuEl.hidden) open(); else close();
+    });
+    document.addEventListener('click', (e) => {
+      if (!menuEl.hidden && !btn.contains(e.target) && !menuEl.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !menuEl.hidden) close();
+    });
+    return { select, clear };
+  }
+
+  const fromPop = setupTimePop({ btn: fromBtn, valueEl: fromValueEl, menuEl: fromMenu, hiddenInput: fromInput, onChange: () => recompute() });
+  const toPop = setupTimePop({ btn: toBtn, valueEl: toValueEl, menuEl: toMenu, hiddenInput: toInput, onChange: () => recompute() });
+
+  // Hodinové sazby per prostor — drží se shodně s time pickerem
+  const HOURLY_RATES = {
+    'Studio': 1200,
+    'Podcastová / konferenční místnost': 600,
+    'Celé studio': 1700,
+  };
+  const OVERTIME_MULT = 1.3;
+
+  let space = null;
+
+  function rateFor(sp) {
+    if (!sp || !HOURLY_RATES[sp]) return 0;
+    return Math.round(HOURLY_RATES[sp] * OVERTIME_MULT);
+  }
+  function fmtKc(n) { return Math.round(n).toLocaleString('cs-CZ') + ' Kč'; }
+
+  function toMinutes(t) {
+    if (!t) return null;
+    const parts = String(t).split(':');
+    if (parts.length < 2) return null;
+    const hh = parseInt(parts[0], 10);
+    const mm = parseInt(parts[1], 10);
+    if (isNaN(hh) || isNaN(mm)) return null;
+    return hh * 60 + mm;
+  }
+  // Minuty od 22:00 (start přesčasového okna). Po půlnoci vyjdou kladné
+  // hodnoty (00:00 = 120, 07:00 = 540), 22:00 = 0. Umožňuje srovnat časy
+  // přes půlnoc bez bordelu.
+  function overtimeMinutes(t) {
+    const m = toMinutes(t);
+    if (m === null) return null;
+    return ((m - 22 * 60) + 24 * 60) % (24 * 60);
+  }
+  // Účtujeme po půlhodinách: 30 min = 0,5 h. Vstupy jsou na 30 min,
+  // takže výsledek je vždy násobek 0,5 (1, 1.5, 2, 2.5, …) — žádný ceil.
+  function billedHoursFromRange(from, to) {
+    const a = overtimeMinutes(from);
+    const b = overtimeMinutes(to);
+    if (a === null || b === null) return 0;
+    const minutes = b - a;
+    if (minutes <= 0) return 0;
+    return minutes / 60;
+  }
+
+  function recompute() {
+    const enabled = checkbox.checked;
+    detail.hidden = !enabled;
+    const rate = rateFor(space);
+    rateLabel.textContent = rate ? `Sazba ${fmtKc(rate)} / hod (+30 %)` : 'Vyber prostor v ceníku';
+    if (!enabled || !rate) {
+      calcLabel.textContent = '';
+      window.dilnaTotal.overtime = 0;
+      window.dilnaTotal.overtimeDetail = '';
+      window.dilnaTotal.render();
+      return;
+    }
+    const hours = billedHoursFromRange(fromInput.value, toInput.value);
+    const overtimeAmount = hours * rate;
+    if (hours > 0) {
+      const hoursStr = hours.toLocaleString('cs-CZ', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+      calcLabel.textContent = `${fromInput.value}–${toInput.value} · ${hoursStr} h × ${fmtKc(rate)} = ${fmtKc(overtimeAmount)}`;
+      window.dilnaTotal.overtime = overtimeAmount;
+      window.dilnaTotal.overtimeDetail =
+        `<span class="total-row total-row--overtime">+ přesčas ${fromInput.value}–${toInput.value}</span>` +
+        `<span class="total-row">${hoursStr} h × ${fmtKc(rate)}</span>`;
+    } else {
+      calcLabel.textContent = fromInput.value || toInput.value ? 'Vyplň oba časy.' : '';
+      window.dilnaTotal.overtime = 0;
+      window.dilnaTotal.overtimeDetail = '';
+    }
+    window.dilnaTotal.render();
+  }
+
+  checkbox.addEventListener('change', recompute);
+
+  document.addEventListener('variant:select', (e) => {
+    space = e.detail.space || null;
+    recompute();
+  });
+  document.addEventListener('variant:clear', () => {
+    space = null;
+    recompute();
+  });
+  document.addEventListener('booking:reset', () => {
+    checkbox.checked = false;
+    fromPop.clear();
+    toPop.clear();
+    space = null;
+    recompute();
+  });
+})();
 
 /* =========================================================
    BOOKING FORM — AJAX submit přes Formspree, in-page feedback
@@ -1698,12 +2209,17 @@ function flashPricingError() {
       return;
     }
 
-    // 3) Čas pronájmu — povinný výběr (busy bloky jsou klikatelné, takže
-     //    uživatel vždycky může něco vybrat — i s warningem).
+    // 3) Čas pronájmu — buď běžný výběr (cas_od + cas_do), nebo přesčas
+    //    (zaškrtnutý checkbox + prescas_od + prescas_do). Stačí jedno z nich.
     const timeFrom = document.getElementById('f-time-from');
     const timeTo = document.getElementById('f-time-to');
-    if (!timeFrom.value || !timeTo.value) {
-      showFeedback('error', 'Vyberte prosím čas pronájmu v oddílu „Čas pronájmu".');
+    const otOn = document.getElementById('f-overtime-enabled');
+    const otFrom = document.getElementById('f-overtime-from');
+    const otTo = document.getElementById('f-overtime-to');
+    const hasRegular = !!(timeFrom && timeFrom.value && timeTo && timeTo.value);
+    const hasOvertime = !!(otOn && otOn.checked && otFrom && otFrom.value && otTo && otTo.value);
+    if (!hasRegular && !hasOvertime) {
+      showFeedback('error', 'Vyberte čas pronájmu — buď v rámci provozní doby, nebo zaškrtněte „mimo rozmezí 8:00–22:00" a vyplňte časy.');
       return;
     }
 

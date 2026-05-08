@@ -1033,7 +1033,7 @@ button { font: inherit; cursor: pointer; }
    PRICING
    ========================================================= */
 .pricing {
-  padding: 3rem var(--pad-x) 3rem;
+  padding: 3rem var(--pad-x) 0.6rem;
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(320px, 1fr);
   column-gap: 5rem;
@@ -1070,7 +1070,9 @@ button { font: inherit; cursor: pointer; }
 }
 
 .pricing__table-wrap {
-  overflow-x: auto;
+  /* Žádný horizontální scrollbar — tabulka se musí vejít do gridu.
+     Padding a velikost písma uvnitř buněk jsou nastavené tak, aby fit. */
+  overflow: visible;
 }
 .pricing__table {
   width: 100%;
@@ -1096,14 +1098,15 @@ button { font: inherit; cursor: pointer; }
   width: 26%;
 }
 .pricing__table tbody th {
+  position: relative;
   font-family: var(--display);
   font-weight: 400;
-  font-size: clamp(1.4rem, 2.8vw, 2.4rem);
-  line-height: 1;
+  font-size: clamp(1.15rem, 2vw, 1.85rem);
+  line-height: 1.05;
   text-transform: uppercase;
   text-align: left;
   vertical-align: top;
-  padding: 2.4rem 1rem;
+  padding: 1.7rem 0.7rem;
   border-bottom: 1px solid var(--line-soft);
 }
 .pricing__table tbody th small {
@@ -1118,10 +1121,10 @@ button { font: inherit; cursor: pointer; }
 }
 .pricing__table td {
   font-family: var(--display);
-  font-size: clamp(1.05rem, 1.8vw, 1.6rem);
+  font-size: clamp(0.92rem, 1.4vw, 1.3rem);
   line-height: 1;
   text-transform: uppercase;
-  padding: 2.4rem 1rem;
+  padding: 1.7rem 0.55rem;
   vertical-align: top;
   border-bottom: 1px solid var(--line-soft);
   color: var(--ink);
@@ -1143,6 +1146,154 @@ button { font: inherit; cursor: pointer; }
   color: var(--paper);
 }
 .price-cell.is-selected:hover { background: var(--rust-deep); }
+
+/* Slevový badge — zelená "nálepka" v pravém horním rohu cenové buňky.
+   Dvouřádkový: malý popisek "SLEVA" nahoře + výraznější procento dole. */
+.price-cell__badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.55rem;
+  background: #1f9d55;
+  color: #fff;
+  padding: 0.32rem 0.55rem 0.36rem;
+  border-radius: 3px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 2px 8px rgba(31, 157, 85, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.price-cell__badge-label {
+  font-family: var(--sans);
+  font-size: 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.95;
+}
+.price-cell__badge-value {
+  font-family: var(--display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.price-cell.is-selected .price-cell__badge {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1f9d55;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+/* Slevový badge u nadpisu řádku — stejný look jako .price-cell__badge,
+   absolute v pravém horním rohu th. Smí lehce zasahovat přes nadpis. */
+.row-badge {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: #1f9d55;
+  color: #fff;
+  padding: 0.32rem 0.55rem 0.36rem;
+  border-radius: 3px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(31, 157, 85, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  z-index: 2;
+}
+.row-badge-label {
+  font-family: var(--sans);
+  font-size: 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.95;
+}
+.row-badge-value {
+  font-family: var(--display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Doba pronájmu (černý pill) + popisek bloků striktně na jednom řádku. */
+.tier-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  margin-top: 0.7rem;
+}
+.tier-meta .duration-tag {
+  display: inline-block;
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+.pricing__table tbody th .tier-meta small {
+  display: inline-block;
+  margin-top: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+/* Černý "duration" pill — pod nadpisem řádku ukazuje 1 hodina / 4 hodiny / 7 hodin / 14 hodin */
+.duration-tag {
+  display: block;
+  width: fit-content;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.32rem 0.6rem;
+  margin-top: 0.75rem;
+  border-radius: 2px;
+  line-height: 1.1;
+}
+.pricing__table tbody th .duration-tag + small {
+  margin-top: 0.45rem;
+}
+
+/* Featured řádek — zelený rámeček + jemné zelené podbarvení (zvýrazní
+   doporučenou variantu, ladí s barvou slevových badgů).
+   Zvýšená specificita (.pricing__table tbody …) překonává základní
+   border-bottom: 1px solid var(--line-soft) z .pricing__table tbody th. */
+.pricing__table tbody .tier-row--featured th,
+.pricing__table tbody .tier-row--featured td {
+  background: rgba(31, 157, 85, 0.06);
+  border-top: 2px solid #1f9d55;
+  border-bottom: 2px solid #1f9d55;
+}
+.pricing__table tbody .tier-row--featured th { border-left: 2px solid #1f9d55; }
+.pricing__table tbody .tier-row--featured td:last-child { border-right: 2px solid #1f9d55; }
+
+/* Hover na cenách uvnitř featured (zeleného) řádku → tmavší zelený podtisk
+   místo rust default. Specificita (0,4,2) překonává statické pravidlo
+   .pricing__table tbody .tier-row--featured td (0,3,2). */
+.pricing__table tbody .tier-row--featured .price-cell:hover {
+  background: rgba(31, 157, 85, 0.18);
+}
+/* Vybraná buňka v zeleném řádku → solid zelená místo rust. Vyšší
+   specificita než .price-cell.is-selected (0,2,1). */
+.pricing__table tbody .tier-row--featured .price-cell.is-selected {
+  background: #1f9d55;
+  color: var(--paper);
+}
+.pricing__table tbody .tier-row--featured .price-cell.is-selected:hover {
+  background: #157a3f;
+}
 
 /* Flash pro upozornění "vyberte variantu" — jemné rust podbarvení (20% alpha),
    text barvu měnit nebudeme. Esteticky decentní. */
@@ -1188,7 +1339,7 @@ button { font: inherit; cursor: pointer; }
 }
 
 .pricing__note {
-  margin: 2rem 0 0;
+  margin: 0.7rem 0 0;
   font-size: 0.85rem;
   color: var(--ink-soft);
   white-space: nowrap;
@@ -1209,7 +1360,7 @@ button { font: inherit; cursor: pointer; }
    BOOKING — formulář jako dominantní prvek
    ========================================================= */
 .booking {
-  padding: 3rem var(--pad-x) 12rem;
+  padding: 1.8rem var(--pad-x) 12rem;
   background: var(--ink);
   color: var(--paper);
 }
@@ -1390,6 +1541,18 @@ button { font: inherit; cursor: pointer; }
   align-items: start;
 }
 .booking__form-col, .booking__calendar-col { min-width: 0; }
+
+/* Lock — formulář se zamkne dokud nevyberete cenu + datum.
+   Variant chip (pokud je vidět) zůstává aktivní, aby šlo zrušit výběr. */
+.booking__form-col .form,
+.booking__form-col .booking__variant {
+  transition: opacity 0.25s ease;
+}
+.booking__form-col.is-locked .form {
+  opacity: 0.32;
+  pointer-events: none;
+  filter: grayscale(0.4);
+}
 
 @media (max-width: 1024px) {
   .booking__layout { grid-template-columns: 1fr; gap: 3rem; }
@@ -1669,9 +1832,37 @@ button { font: inherit; cursor: pointer; }
   opacity: 0.7;
 }
 .booking-form__total-detail {
-  font-size: 0.8rem;
-  opacity: 0.78;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.82rem;
   line-height: 1.35;
+}
+.booking-form__total-detail:empty { display: none; }
+.booking-form__total-detail .total-row {
+  display: block;
+  opacity: 0.78;
+}
+.booking-form__total-detail .total-row--time {
+  font-family: var(--display);
+  letter-spacing: 0.05em;
+  font-size: 0.95rem;
+  opacity: 1;
+  color: var(--paper);
+}
+.booking-form__total-detail .total-row--overtime {
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.18);
+  color: var(--rust);
+  opacity: 1;
+  font-family: var(--display);
+  letter-spacing: 0.04em;
+}
+.booking-form__total-detail em {
+  font-style: normal;
+  opacity: 0.7;
+  margin-left: 0.25rem;
 }
 
 .booking-form__total-amount {
@@ -1721,6 +1912,223 @@ button { font: inherit; cursor: pointer; }
   text-transform: uppercase;
   color: var(--rust);
   line-height: 1;
+}
+
+/* Overtime field — pronájem mimo provozní dobu */
+.overtime-field { cursor: default !important; }
+.overtime-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  cursor: pointer;
+}
+.overtime-toggle input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+  flex: 0 0 auto;
+  position: relative;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+.overtime-toggle input[type="checkbox"]:checked {
+  background: var(--rust);
+  border-color: var(--rust);
+}
+.overtime-toggle input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--paper);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.overtime-toggle__text { display: flex; flex-direction: column; gap: 0.15rem; }
+.overtime-toggle__text strong {
+  font-family: var(--display);
+  font-size: 0.95rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.overtime-toggle__text small {
+  font-size: 0.78rem;
+  opacity: 0.6;
+  line-height: 1.4;
+}
+
+.overtime-detail {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.overtime-detail[hidden] { display: none; }
+
+.overtime-times {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/* Custom time-picker dropdown — vlastní popup místo nativního <input type="time">,
+   napříč prohlížeči vypadá konzistentně. 48 položek (00:00–23:30, krok 30 min),
+   scrollable. Otevřené menu je absolute pod tlačítkem. */
+.time-pop {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.time-pop__label {
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  font-family: var(--display);
+}
+.time-pop__btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--paper);
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+  font-family: var(--display);
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+  text-align: left;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+.time-pop__btn:hover { border-color: rgba(214, 80, 49, 0.55); }
+.time-pop__btn[aria-expanded="true"] {
+  border-color: var(--rust);
+  background: rgba(214, 80, 49, 0.06);
+}
+.time-pop__value { color: var(--paper); }
+.time-pop__caret {
+  width: 11px;
+  height: 7px;
+  opacity: 0.55;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+  flex: 0 0 auto;
+}
+.time-pop__caret path {
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  fill: none;
+}
+.time-pop__btn[aria-expanded="true"] .time-pop__caret {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+.time-pop__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  max-height: 260px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  padding: 4px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.time-pop__menu[hidden] { display: none; }
+.time-pop__menu::-webkit-scrollbar { width: 6px; }
+.time-pop__menu::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 3px; }
+.time-pop__opt {
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--display);
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  padding: 0.55rem 0.4rem;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.time-pop__opt:hover {
+  background: rgba(214, 80, 49, 0.18);
+  color: var(--paper);
+}
+.time-pop__opt.is-after-hours {
+  /* Časy mimo provozní dobu (typické pro přesčas) — zvýrazněné */
+  color: var(--paper);
+}
+.time-pop__opt.is-selected {
+  background: var(--rust);
+  color: var(--paper);
+}
+.time-pop__sep {
+  align-self: flex-end;
+  font-family: var(--display);
+  color: var(--rust);
+  opacity: 0.7;
+  padding-bottom: 0.7rem;
+  font-size: 1.2rem;
+}
+
+@media (max-width: 480px) {
+  .time-pop__sep { display: none; }
+  .time-pop { flex-basis: 100%; }
+}
+
+.overtime-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(214, 80, 49, 0.1);
+  border-left: 2px solid var(--rust);
+}
+.overtime-rate {
+  font-family: var(--display);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--rust);
+}
+.overtime-calc {
+  font-size: 0.85rem;
+  color: var(--paper);
+  opacity: 0.85;
+  line-height: 1.35;
+}
+.overtime-calc:empty { display: none; }
+.overtime-hint {
+  margin: 0;
+  font-size: 0.74rem;
+  opacity: 0.55;
+  line-height: 1.4;
+}
+
+@media (max-width: 480px) {
+  .overtime-time__sep { display: none; }
+  .overtime-time { flex-basis: 100%; }
 }
 
 /* Time picker — výběr času pronájmu, propojený s variantou + datumem */
@@ -1783,6 +2191,19 @@ button { font: inherit; cursor: pointer; }
   border-color: rgba(239, 68, 68, 0.28);
 }
 .time-slot--busy:hover { border-color: rgba(239, 68, 68, 0.28); background: rgba(239, 68, 68, 0.1); }
+/* Zakázaná délka rezervace (0,5 h nebo 1,5 h) — bod existuje, ale klik na něj
+   by porušil pravidla. Vizuálně tlumený, není klikatelný, native title tooltip. */
+.time-slot--disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  pointer-events: auto;
+}
+.time-slot--disabled:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
 .time-slot--in-range {
   background: rgba(214, 80, 49, 0.32);
   border-color: rgba(214, 80, 49, 0.55);
@@ -1897,9 +2318,61 @@ button { font: inherit; cursor: pointer; }
    CALENDAR — vytíženost studia podle vybrané varianty
    ========================================================= */
 .calendar {
+  position: relative;
   border: 1px solid rgba(255, 255, 255, 0.18);
   padding: 1.2rem 1.2rem 1.1rem;
   background: rgba(255, 255, 255, 0.03);
+}
+/* Lock overlay — když není vybraná cena, kalendář je zšedlý a překrytý
+   tlačítkem, které odroluje k ceníku. */
+.calendar__lock {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  background: rgba(10, 10, 10, 0.78);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  border: 0;
+  cursor: pointer;
+  color: var(--paper);
+  font-family: var(--display);
+  text-transform: uppercase;
+  text-align: center;
+  padding: 1.5rem;
+  transition: background 0.2s ease, opacity 0.25s ease, visibility 0.25s ease;
+}
+.calendar__lock:hover { background: rgba(10, 10, 10, 0.85); }
+.calendar__lock-arrow {
+  font-size: 1.4rem;
+  color: var(--rust);
+  line-height: 1;
+}
+.calendar__lock-text {
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+}
+.calendar__lock-sub {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  opacity: 0.65;
+  text-transform: uppercase;
+  margin-top: 0.25rem;
+}
+.calendar:not(.is-locked) .calendar__lock {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.calendar.is-locked > *:not(.calendar__lock) {
+  filter: grayscale(0.6);
+  opacity: 0.55;
+  transition: opacity 0.25s ease, filter 0.25s ease;
 }
 .calendar__header {
   display: flex;

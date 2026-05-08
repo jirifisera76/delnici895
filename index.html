@@ -20,7 +20,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
   <!-- Leaflet a Pannellum CSS/JS se NACHÁZEJÍ LAZY z script.js až když user
        doroluje k mapě/360, ne na initial page load (300 KB šetříme). -->
-  <link rel="stylesheet" href="styles.css?v=71" />
+  <link rel="stylesheet" href="styles.css?v=105" />
 
   <meta property="og:title" content="Dílna — Industriální kreativní studio v Holešovicích" />
   <meta property="og:description" content="150 m² industriálního kreativního studia v Praze-Holešovicích pro natáčení, focení a produkci." />
@@ -312,17 +312,23 @@
             <td class="price-cell" data-price="od 600 Kč" tabindex="0" role="button">od 600 Kč</td>
             <td class="price-cell" data-price="od 1 700 Kč" tabindex="0" role="button">od 1 700 Kč</td>
           </tr>
-          <tr data-tier-label="Půldenní pronájem (4 h)">
-            <th scope="row">Půldenní pronájem<small>4 hodiny</small></th>
-            <td class="price-cell" data-price="od 4 200 Kč" tabindex="0" role="button">od 4 200 Kč</td>
-            <td class="price-cell" data-price="od 2 200 Kč" tabindex="0" role="button">od 2 200 Kč</td>
-            <td class="price-cell" data-price="od 5 800 Kč" tabindex="0" role="button">od 5 800 Kč</td>
+          <tr class="tier-row--featured" data-tier-label="Mini blok (4 h)">
+            <th scope="row"><span class="row-badge"><span class="row-badge-label">Sleva</span><span class="row-badge-value">−10 %</span></span>Mini blok<span class="tier-meta"><span class="duration-tag">4 hodiny</span><small>Ráno<br>Odpoledne<br>Večer</small></span></th>
+            <td class="price-cell" data-price="od 4 300 Kč" tabindex="0" role="button">od 4 300 Kč</td>
+            <td class="price-cell" data-price="od 2 160 Kč" tabindex="0" role="button">od 2 160 Kč</td>
+            <td class="price-cell" data-price="od 6 100 Kč" tabindex="0" role="button">od 6 100 Kč</td>
           </tr>
-          <tr data-tier-label="Celodenní pronájem (10 h)">
-            <th scope="row">Celodenní pronájem<small>10 hodin</small></th>
-            <td class="price-cell" data-price="od 8 900 Kč" tabindex="0" role="button">od 8 900 Kč</td>
-            <td class="price-cell" data-price="od 4 800 Kč" tabindex="0" role="button">od 4 800 Kč</td>
-            <td class="price-cell" data-price="od 12 500 Kč" tabindex="0" role="button">od 12 500 Kč</td>
+          <tr data-tier-label="Půldenní pronájem (7 h)">
+            <th scope="row"><span class="row-badge"><span class="row-badge-label">Sleva</span><span class="row-badge-value">−17 %</span></span>Půldenní pronájem<span class="tier-meta"><span class="duration-tag">7 hodin</span><small>8–15 / 15–22</small></span></th>
+            <td class="price-cell" data-price="od 7 000 Kč" tabindex="0" role="button">od 7 000 Kč</td>
+            <td class="price-cell" data-price="od 3 500 Kč" tabindex="0" role="button">od 3 500 Kč</td>
+            <td class="price-cell" data-price="od 9 900 Kč" tabindex="0" role="button">od 9 900 Kč</td>
+          </tr>
+          <tr data-tier-label="Celodenní pronájem (14 h)">
+            <th scope="row"><span class="row-badge"><span class="row-badge-label">Sleva</span><span class="row-badge-value">−33 %</span></span>Celodenní pronájem<span class="tier-meta"><span class="duration-tag">14 hodin</span><small>8–22</small></span></th>
+            <td class="price-cell" data-price="od 11 300 Kč" tabindex="0" role="button">od 11 300 Kč</td>
+            <td class="price-cell" data-price="od 5 600 Kč" tabindex="0" role="button">od 5 600 Kč</td>
+            <td class="price-cell" data-price="od 15 900 Kč" tabindex="0" role="button">od 15 900 Kč</td>
           </tr>
         </tbody>
       </table>
@@ -407,13 +413,51 @@
           </div>
 
           <div class="field field--full time-field">
-            <label>Čas pronájmu</label>
+            <label>Čas pronájmu <span class="field__optional">volitelné, pokud poptáváte jen mimo provozní dobu</span></label>
             <div class="time-picker" id="timePicker">
               <p class="time-picker__hint">Nejdřív vyberte cenu a datum — ukážeme dostupné časy.</p>
             </div>
             <input type="hidden" name="cas_od" id="f-time-from" />
             <input type="hidden" name="cas_do" id="f-time-to" />
             <input type="hidden" name="cena_celkem" id="f-price-total" />
+          </div>
+
+          <div class="field field--full overtime-field">
+            <label class="overtime-toggle">
+              <input type="checkbox" id="f-overtime-enabled" name="prescas_zajem" />
+              <span class="overtime-toggle__text">
+                <strong>Zašlete poptávku na pronájem mimo rozmezí 8:00–22:00</strong>
+                <small>Mimo provozní dobu účtujeme přirážku +30 % k hodinové sazbě.</small>
+              </span>
+            </label>
+            <div class="overtime-detail" id="overtimeDetail" hidden>
+              <div class="overtime-times">
+                <div class="time-pop">
+                  <span class="time-pop__label">Od</span>
+                  <button type="button" class="time-pop__btn" id="otFromBtn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="time-pop__value" id="otFromValue">—:—</span>
+                    <svg class="time-pop__caret" aria-hidden="true" viewBox="0 0 12 8"><path d="M1 1l5 5 5-5"/></svg>
+                  </button>
+                  <div class="time-pop__menu" id="otFromMenu" role="listbox" aria-label="Čas od" hidden></div>
+                  <input type="hidden" id="f-overtime-from" name="prescas_od" />
+                </div>
+                <span class="time-pop__sep" aria-hidden="true">→</span>
+                <div class="time-pop">
+                  <span class="time-pop__label">Do</span>
+                  <button type="button" class="time-pop__btn" id="otToBtn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="time-pop__value" id="otToValue">—:—</span>
+                    <svg class="time-pop__caret" aria-hidden="true" viewBox="0 0 12 8"><path d="M1 1l5 5 5-5"/></svg>
+                  </button>
+                  <div class="time-pop__menu" id="otToMenu" role="listbox" aria-label="Čas do" hidden></div>
+                  <input type="hidden" id="f-overtime-to" name="prescas_do" />
+                </div>
+              </div>
+              <div class="overtime-summary">
+                <span class="overtime-rate" id="overtimeRate">Vyber prostor v ceníku</span>
+                <span class="overtime-calc" id="overtimeCalc"></span>
+              </div>
+              <p class="overtime-hint">Odhadovaná cena za přesčas se připočte k celkové ceně. Přesný čas potvrdíme po vašem kontaktu.</p>
+            </div>
           </div>
 
           <div class="field field--full">
@@ -425,6 +469,11 @@
 
         <div class="booking__calendar-col">
           <div class="calendar" id="calendar">
+          <button type="button" class="calendar__lock" id="calendarLockBtn" aria-label="Nejdřív vyberte cenu v ceníku výše">
+            <span class="calendar__lock-arrow" aria-hidden="true">↑</span>
+            <span class="calendar__lock-text">Vyber prostor a sazbu</span>
+            <span class="calendar__lock-sub">Klikem otevřete ceník</span>
+          </button>
           <div class="calendar__header">
             <button type="button" class="calendar__nav" data-dir="-1" aria-label="Předchozí měsíc">‹</button>
             <h3 class="calendar__title" id="calendarTitle"></h3>
@@ -526,6 +575,6 @@
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="script.js?v=71" defer></script>
+  <script src="script.js?v=105" defer></script>
 </body>
 </html>
