@@ -8,16 +8,46 @@
   <meta name="robots" content="noindex, nofollow" />
   <meta name="theme-color" content="#ffffff" />
   <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+
+  <!-- Preconnect — TLS handshake hned při startu, šetří ~150 ms na první fetch -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
+  <link rel="preconnect" href="https://basemaps.cartocdn.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
-  <link rel="stylesheet" href="styles.css?v=62" />
+  <!-- Leaflet a Pannellum CSS/JS se NACHÁZEJÍ LAZY z script.js až když user
+       doroluje k mapě/360, ne na initial page load (300 KB šetříme). -->
+  <link rel="stylesheet" href="styles.css?v=71" />
 
   <meta property="og:title" content="Dílna — Industriální kreativní studio v Holešovicích" />
   <meta property="og:description" content="150 m² industriálního kreativního studia v Praze-Holešovicích pro natáčení, focení a produkci." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://studiodilna.cz" />
+  <meta property="og:locale" content="cs_CZ" />
+
+  <!-- LocalBusiness structured data — pomáhá Google v knowledge panelu -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "Studio Dílna",
+    "description": "Industriální kreativní studio 150 m² v Praze-Holešovicích pro natáčení, focení, podcasty a workshopy.",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Přístavní 1315/7",
+      "addressLocality": "Praha 7-Holešovice",
+      "postalCode": "170 00",
+      "addressCountry": "CZ"
+    },
+    "geo": { "@type": "GeoCoordinates", "latitude": 50.10266, "longitude": 14.45046 },
+    "email": "info@studiodilna.cz",
+    "url": "https://studiodilna.cz",
+    "areaServed": "Praha"
+  }
+  </script>
 </head>
 <body>
 
@@ -60,28 +90,28 @@
     <!-- Parallax floating images — sledují kurzor s lerp easingem -->
     <div class="floating" id="floating" aria-hidden="true">
       <div class="float-img float-img--1" data-depth="0.5">
-        <img src="https://images.unsplash.com/photo-1727341554370-80e0fe9ad082?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+        <img src="https://images.unsplash.com/photo-1727341554370-80e0fe9ad082?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" decoding="async" />
       </div>
       <div class="float-img float-img--2" data-depth="1">
-        <img src="https://images.unsplash.com/photo-1640680608781-2e4199dd1579?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+        <img src="https://images.unsplash.com/photo-1640680608781-2e4199dd1579?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" decoding="async" />
       </div>
       <div class="float-img float-img--3" data-depth="2">
-        <img src="https://images.unsplash.com/photo-1726083085160-feeb4e1e5b00?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+        <img src="https://images.unsplash.com/photo-1726083085160-feeb4e1e5b00?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" decoding="async" />
       </div>
       <div class="float-img float-img--4" data-depth="1">
-        <img src="https://images.unsplash.com/photo-1562016600-ece13e8ba570?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+        <img src="https://images.unsplash.com/photo-1562016600-ece13e8ba570?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" decoding="async" />
       </div>
       <div class="float-img float-img--5" data-depth="1">
-        <img src="https://images.unsplash.com/photo-1624344965199-ed40391d20f2?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+        <img src="https://images.unsplash.com/photo-1624344965199-ed40391d20f2?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" decoding="async" />
       </div>
       <div class="float-img float-img--6" data-depth="2">
-        <img src="https://images.unsplash.com/photo-1677338354108-223e807fb1bd?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+        <img src="https://images.unsplash.com/photo-1677338354108-223e807fb1bd?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" decoding="async" />
       </div>
       <div class="float-img float-img--7" data-depth="4">
-        <img src="https://images.unsplash.com/photo-1689553079282-45df1b35741b?q=80&amp;w=500&amp;auto=format&amp;fit=crop" alt="" />
+        <img src="https://images.unsplash.com/photo-1689553079282-45df1b35741b?q=80&amp;w=500&amp;auto=format&amp;fit=crop" alt="" decoding="async" />
       </div>
       <div class="float-img float-img--8" data-depth="1">
-        <img src="https://images.unsplash.com/photo-1721968317938-cf8c60fccd1a?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" />
+        <img src="https://images.unsplash.com/photo-1721968317938-cf8c60fccd1a?q=80&amp;w=400&amp;auto=format&amp;fit=crop" alt="" decoding="async" />
       </div>
     </div>
 
@@ -137,14 +167,21 @@
     </div>
   </section>
 
-  <!-- ===== 360° PROHLÍDKA — placeholder pro virtuální tour ===== -->
-  <!-- Vlož sem Matterport / Kuula / Pano2VR iframe, aspect-ratio už je nastavený -->
+  <!-- ===== 360° PROHLÍDKA — Pannellum viewer s přepínáním scén ===== -->
+  <!-- TODO: vyměň `panorama` URL pro každou scénu v script.js initTour() -->
   <section class="tour" id="prohlidka">
-    <a class="tour__placeholder" href="#prohlidka" aria-label="Virtuální prohlídka studia">
-      <span class="tour__label">360°</span>
-      <span class="tour__title">Projděte si studio</span>
-      <span class="tour__hint">Sem přijde virtuální prohlídka prostoru</span>
-    </a>
+    <div class="tour__viewer" id="tourViewer">
+      <div class="tour__loader" id="tourLoader">
+        <span class="tour__loader-icon">360°</span>
+        <span class="tour__loader-label">Načítám prohlídku</span>
+      </div>
+    </div>
+    <div class="tour__scenes" role="tablist" aria-label="Scény prohlídky">
+      <button type="button" class="tour__scene-btn is-active" data-scene="studio" role="tab" aria-selected="true">Studio</button>
+      <button type="button" class="tour__scene-btn" data-scene="cyklorama" role="tab">Cyklorama</button>
+      <button type="button" class="tour__scene-btn" data-scene="podcast" role="tab">Podcastová / konferenční</button>
+      <button type="button" class="tour__scene-btn" data-scene="chill" role="tab">Chill zóna</button>
+    </div>
   </section>
 
   <!-- ===== MY DĚLNÍCI — auto-scrolling team karty + citace ===== -->
@@ -168,7 +205,7 @@
         </article>
         <article class="team__card">
           <div class="team__photo">
-            <img src="assets/team/jiri.jpg" alt="Jiří Fišera" />
+            <img src="assets/team/jiri.jpg" alt="Jiří Fišera" loading="lazy" decoding="async" />
             <div class="team__overlay">
               <span class="team__name">Jiří Fišera</span>
               <span class="team__role">Kovář</span>
@@ -214,7 +251,7 @@
         </article>
         <article class="team__card" aria-hidden="true">
           <div class="team__photo">
-            <img src="assets/team/jiri.jpg" alt="Jiří Fišera" />
+            <img src="assets/team/jiri.jpg" alt="Jiří Fišera" loading="lazy" decoding="async" />
             <div class="team__overlay">
               <span class="team__name">Jiří Fišera</span>
               <span class="team__role">Kovář</span>
@@ -304,6 +341,15 @@
     </div>
 
     <form class="booking-form" id="bookingForm" action="https://formspree.io/f/mlgzwljw" method="POST" novalidate>
+      <!-- Success overlay — animovaný checkmark, ukáže se po úspěšném odeslání -->
+      <div class="booking__success" id="bookingSuccess" hidden>
+        <svg class="booking__success-icon" viewBox="0 0 64 64" aria-hidden="true">
+          <circle class="booking__success-circle" cx="32" cy="32" r="28" />
+          <path class="booking__success-check" d="M19 33 L28 42 L46 22" />
+        </svg>
+        <h3 class="booking__success-title">Poptávka odeslána</h3>
+        <p class="booking__success-text">Děkujeme. Ozveme se vám do 24 hodin na e-mail.</p>
+      </div>
       <input type="hidden" name="varianta" id="f-variant" />
       <input type="hidden" name="_subject" value="Nová poptávka — Studio Dílna" />
       <!-- Honeypot proti botům -->
@@ -371,8 +417,8 @@
           </div>
 
           <div class="field field--full">
-            <label for="f-msg">Zpráva</label>
-            <textarea id="f-msg" name="zprava" rows="4" placeholder="Co plánujete? Délka, počet lidí, technika…"></textarea>
+            <label for="f-msg">Zpráva <span class="field__optional">volitelné</span></label>
+            <textarea id="f-msg" name="zprava" rows="4" placeholder="Poznámky k poptávce — co plánujete, kolik lidí, jaká technika…"></textarea>
           </div>
           </div>
         </div>
@@ -397,9 +443,20 @@
           </div>
 
           <div class="booking-form__total" id="formTotal" hidden>
-            <span class="booking-form__total-label">Cena celkem</span>
-            <span class="booking-form__total-detail" id="formTotalDetail"></span>
-            <span class="booking-form__total-price" id="formTotalPrice"></span>
+            <div class="booking-form__total-head">
+              <span class="booking-form__total-label">Cena celkem</span>
+              <span class="booking-form__total-detail" id="formTotalDetail"></span>
+            </div>
+            <div class="booking-form__total-amount">
+              <span class="booking-form__total-price" id="formTotalPrice"></span>
+              <span class="booking-form__total-vat">
+                + DPH 21 % <em id="formTotalVat"></em>
+              </span>
+            </div>
+            <div class="booking-form__total-grand">
+              <span class="booking-form__total-grand-label">S DPH</span>
+              <span class="booking-form__total-grand-price" id="formTotalGrand"></span>
+            </div>
           </div>
 
           <button class="btn-rust btn-rust--block booking-form__submit" type="submit" id="bookingSubmit">
@@ -421,22 +478,54 @@
 
   <!-- ===== FOOTER ===== -->
   <footer class="foot">
-    <div class="foot__col">
-      <span class="foot__label">Kontakt</span>
-      <a href="mailto:info@studiodilna.cz">info@studiodilna.cz</a>
+    <div class="foot__top">
+      <div class="foot__brand">
+        <a href="#top" class="foot__logo" aria-label="Studio Dílna — domů">
+          <svg viewBox="0 0 1291.92 647.57" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M842.12,0s-24.21,0-50.09,0v647.36h104.31v-88.47l81.48,88.47h50.09S1027.91,0,1027.91,0c-26.97,0-104.31,0-104.31,0v86.11L842.12,0"/>
+            <polygon points="528.02 .2 528.02 647.57 763.9 647.57 763.9 385.88 632.33 385.88 632.33 .2 528.02 .2"/>
+            <path d="M264.01,291.03v356.33h235.88v-356.33c0-17.8-13.09-32.23-29.23-32.23h-177.41c-16.15,0-29.23,14.43-29.23,32.23Z"/>
+            <path d="M264.01,0v180.23c0,17.8,13.09,32.22,29.23,32.22h177.42c16.14,0,29.23-14.43,29.23-32.22V0h-235.88Z"/>
+            <path d="M206.64,0H0v647.36h206.64c16.15,0,29.24-14.43,29.24-32.23V32.23C235.88,14.43,222.79,0,206.64,0ZM131.57,545.64c0,7.18-5.28,12.99-11.79,12.99h-15.47v-299.56h15.47c6.51,0,11.79,5.82,11.79,12.99v273.57Z"/>
+            <path d="M1085.28,0c-16.15,0-29.24,14.43-29.24,32.23v582.91c0,17.8,13.09,32.23,29.24,32.23h75.07v-88.47h27.26v88.47h104.31V0h-206.64ZM1187.61,385.67h-15.47c-6.51,0-11.79-5.82-11.79-12.99V99.11c0-7.18,5.28-12.99,11.79-12.99h15.47v299.56Z"/>
+          </svg>
+        </a>
+        <p class="foot__tag">Industriální kreativní studio<br />v Praze-Holešovicích</p>
+      </div>
+
+      <nav class="foot__nav" aria-label="Navigace">
+        <span class="foot__label">Navigace</span>
+        <a href="#o-studiu">O studiu</a>
+        <a href="#prohlidka">360° prohlídka</a>
+        <a href="#tym">Tým</a>
+        <a href="#cenik">Ceník</a>
+        <a href="#rezervace">Rezervace</a>
+      </nav>
+
+      <div class="foot__col">
+        <span class="foot__label">Kontakt</span>
+        <a href="mailto:info@studiodilna.cz">info@studiodilna.cz</a>
+        <a href="tel:+420775123456">+420 775 123 456</a>
+        <a href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener">
+          Přístavní 1315/7<br />170 00 Praha 7 — Holešovice
+        </a>
+      </div>
+
+      <div class="foot__col">
+        <span class="foot__label">Sledujte</span>
+        <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer">Instagram</a>
+        <a href="https://www.facebook.com/" target="_blank" rel="noopener noreferrer">Facebook</a>
+      </div>
     </div>
-    <div class="foot__col">
-      <span class="foot__label">Adresa</span>
-      <span>Přístavní 1315/7<br/>Praha 7 — Holešovice</span>
-    </div>
-    <div class="foot__col foot__col--end">
-      <span class="foot__label">© 2026</span>
-      <span>Studio Dílna</span>
+
+    <div class="foot__bottom">
+      <span>© 2026 Studio Dílna</span>
+      <span class="foot__legal">IČO: 12345678 · DIČ: CZ12345678</span>
+      <a class="foot__legal" href="#">GDPR &amp; cookies</a>
     </div>
   </footer>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous" defer></script>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="script.js?v=63" defer></script>
+  <script src="script.js?v=71" defer></script>
 </body>
 </html>

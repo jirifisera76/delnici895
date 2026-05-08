@@ -1,4 +1,53 @@
 /* =========================================================
+   LAZY LOADER — externí knihovny (Leaflet, Pannellum) stahujeme až když
+   user doroluje k jejich sekci. Šetří ~300 KB JS+CSS na initial pageload.
+   ========================================================= */
+window.dilnaLazyLib = (function () {
+  const cssCache = {};
+  const jsCache = {};
+  function loadCSS(href) {
+    if (cssCache[href]) return cssCache[href];
+    cssCache[href] = new Promise((resolve) => {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      link.onload = resolve;
+      link.onerror = resolve;
+      document.head.appendChild(link);
+    });
+    return cssCache[href];
+  }
+  function loadJS(src) {
+    if (jsCache[src]) return jsCache[src];
+    jsCache[src] = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.body.appendChild(s);
+    });
+    return jsCache[src];
+  }
+  function loadOnIntersection(targetEl, rootMargin, callback) {
+    if (!targetEl) return;
+    if (!('IntersectionObserver' in window)) {
+      // Fallback — starý browser, prostě nahraj hned
+      callback();
+      return;
+    }
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        obs.disconnect();
+        callback();
+      }
+    }, { rootMargin });
+    obs.observe(targetEl);
+  }
+  return { loadCSS, loadJS, loadOnIntersection };
+})();
+
+/* =========================================================
    AVAILABILITY — sdílený data layer pro kalendář i time picker.
 
    HIERARCHIE PROSTORŮ:
@@ -878,6 +927,11 @@ if ('IntersectionObserver' in window) {
     render();
     document.dispatchEvent(new CustomEvent('calendar:rerender'));
   });
+  // Po úspěšném odeslání — vyčistit i picked datum
+  document.addEventListener('booking:reset', () => {
+    pickedISO = null;
+    render();
+  });
 
   render();
 })();
@@ -1039,6 +1093,150 @@ if ('IntersectionObserver' in window) {
 
 
 /* =========================================================
+   360° TOUR — Pannellum viewer s placeholder panoramatem.
+   Až dostaneme vlastní 360 fotku studia, vyměníme `panorama` URL.
+   ========================================================= */
+(function setupTour() {
+  const el = document.getElementById('tourViewer');
+  if (!el) return;
+  // Pannellum nahrajeme až když user doroluje k tour sekci
+  window.dilnaLazyLib.loadOnIntersection(el, '400px', async () => {
+    await window.dilnaLazyLib.loadCSS('https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css');
+    await window.dilnaLazyLib.loadJS('https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js');
+    initTour();
+  });
+})();
+
+function initTour() {
+  const el = document.getElementById('tourViewer');
+  const loader = document.getElementById('tourLoader');
+  const buttons = document.querySelectorAll('.tour__scene-btn');
+  if (!el || typeof pannellum === 'undefined') return;
+
+  // Placeholder panoramata — zatím dvě demo fotky z Pannellum, různé úhly,
+  // ať každá scéna ukáže viditelně něco jiného. Až dorazí reálné 360 fotky
+  // z natáčení studia, vyměníme `panorama` URL u každého klíče.
+  const SCENES = {
+    studio: {
+      title: 'Studio',
+      panorama: 'https://pannellum.org/images/cerro-toco-0.jpg',
+      yaw: 0, pitch: 0,
+    },
+    cyklorama: {
+      title: 'Cyklorama',
+      panorama: 'https://pannellum.org/images/alma.jpg',
+      yaw: 90, pitch: -10,
+    },
+    podcast: {
+      title: 'Podcastová / konferenční',
+      panorama: 'https://pannellum.org/images/cerro-toco-0.jpg',
+      yaw: 180, pitch: 5,
+    },
+    chill: {
+      title: 'Chill zóna',
+      panorama: 'https://pannellum.org/images/alma.jpg',
+      yaw: -90, pitch: 0,
+    },
+  };
+
+  // Build Pannellum scenes config
+  const scenes = {};
+  Object.keys(SCENES).forEach((key) => {
+    const s = SCENES[key];
+    scenes[key] = {
+      type: 'equirectangular',
+      panorama: s.panorama,
+      title: s.title,
+      yaw: s.yaw,
+      pitch: s.pitch,
+      hfov: 100,
+      autoRotate: -2,
+      mouseZoom: false,
+    };
+  });
+
+  const viewer = pannellum.viewer('tourViewer', {
+    default: {
+      firstScene: 'studio',
+      sceneFadeDuration: 700,
+      autoLoad: true,
+      compass: false,
+      showControls: false,
+      showZoomCtrl: false,
+      showFullscreenCtrl: false,
+    },
+    scenes,
+  });
+
+  function hideLoader() { if (loader) loader.classList.add('is-hidden'); }
+  function showLoader() { if (loader) loader.classList.remove('is-hidden'); }
+  viewer.on('load', hideLoader);
+  viewer.on('scenechange', showLoader);
+  viewer.on('error', (err) => { console.error('Tour error', err); hideLoader(); });
+  setTimeout(hideLoader, 8000);
+
+  // Šetření CPU: zastav autoRotate když user nemá kurzor na vieweru
+  // (desktop) nebo když sekce není ve viewportu (oba).
+  const ROTATE_SPEED = -2;
+  const isTouch = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  function startRotate() { try { viewer.startAutoRotate(ROTATE_SPEED); } catch (_) {} }
+  function stopRotate()  { try { viewer.stopAutoRotate(); } catch (_) {} }
+
+  if (!isTouch) {
+    // Desktop: hover-based pause
+    el.addEventListener('mouseenter', startRotate);
+    el.addEventListener('mouseleave', stopRotate);
+    stopRotate(); // start paused — user musí hovrnout, ať se rozjede
+  }
+  // Pojistka pro oba (především mobilní): zastav když sekce mimo viewport
+  if ('IntersectionObserver' in window) {
+    const obs = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) {
+        if (isTouch) startRotate();
+      } else {
+        stopRotate();
+      }
+    }, { threshold: 0.05 });
+    obs.observe(el);
+  }
+
+  // Scene switcher
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const scene = btn.dataset.scene;
+      if (!SCENES[scene]) return;
+      buttons.forEach((b) => {
+        b.classList.toggle('is-active', b === btn);
+        b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+      });
+      viewer.loadScene(scene);
+    });
+  });
+}
+
+/* =========================================================
+   DATE INPUT — zamez vyplnění data v minulosti (min atribut + JS guard)
+   ========================================================= */
+(function initDateMin() {
+  const dateInput = document.getElementById('f-date');
+  if (!dateInput) return;
+  function todayISO() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  dateInput.min = todayISO();
+  // Pokud uživatel přesto napíše minulé datum (typing), srovnej ho při blur
+  dateInput.addEventListener('blur', () => {
+    if (dateInput.value && dateInput.value < dateInput.min) {
+      dateInput.value = '';
+    }
+  });
+})();
+
+/* =========================================================
    TIME PICKER — výběr času pronájmu propojený s variantou + datumem.
 
    Architektura:
@@ -1114,11 +1312,22 @@ if ('IntersectionObserver' in window) {
   const totalBox = document.getElementById('formTotal');
   const totalDetail = document.getElementById('formTotalDetail');
   const totalPrice = document.getElementById('formTotalPrice');
+  const totalVat = document.getElementById('formTotalVat');
+  const totalGrand = document.getElementById('formTotalGrand');
+  const VAT_RATE = 0.21;
 
+  function fmt(n) {
+    // Zaokrouhlujeme na celé koruny, ať to nevypadá hloupě s halíři
+    return Math.round(n).toLocaleString('cs-CZ') + ' Kč';
+  }
   function showTotal(detail, total) {
     if (!totalBox) return;
+    const vat = total * VAT_RATE;
+    const grand = total + vat;
     if (totalDetail) totalDetail.textContent = detail;
-    if (totalPrice) totalPrice.textContent = total.toLocaleString('cs-CZ') + ' Kč';
+    if (totalPrice) totalPrice.textContent = fmt(total);
+    if (totalVat) totalVat.textContent = fmt(vat);
+    if (totalGrand) totalGrand.textContent = fmt(grand);
     totalBox.hidden = false;
   }
   function hideTotal() {
@@ -1407,6 +1616,68 @@ function flashPricingError() {
     feedback.hidden = false;
   }
 
+  function showSuccessAndReset() {
+    const success = document.getElementById('bookingSuccess');
+    if (!success) return;
+    success.removeAttribute('hidden');
+    // Force reflow → animace startuje od začátku, nesedí na předchozím stavu
+    void success.offsetWidth;
+    success.classList.add('is-visible');
+
+    // Po 4 s plynule fadnout, pak resetovat formulář
+    setTimeout(() => {
+      success.classList.remove('is-visible');
+      setTimeout(() => {
+        success.setAttribute('hidden', '');
+        resetBookingState();
+      }, 500); // čas na fade-out
+    }, 4000);
+  }
+
+  function resetBookingState() {
+    form.reset();
+
+    // Cenová varianta — odoznačit cell + skrýt chip + clear hidden input
+    document.querySelectorAll('.price-cell.is-selected').forEach((c) =>
+      c.classList.remove('is-selected')
+    );
+    const variantBox = document.getElementById('bookingVariant');
+    if (variantBox) variantBox.hidden = true;
+    const variantField = document.getElementById('f-variant');
+    if (variantField) variantField.value = '';
+
+    // Notifikace ostatním komponentám
+    document.dispatchEvent(new CustomEvent('variant:clear'));
+    document.dispatchEvent(new CustomEvent('booking:reset'));
+
+    // Total box, time picker hidden inputs
+    const totalBox = document.getElementById('formTotal');
+    if (totalBox) totalBox.hidden = true;
+    ['f-time-from', 'f-time-to', 'f-price-total'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    // Email ghost (faded návrh domény)
+    const emailGhost = document.getElementById('emailGhost');
+    if (emailGhost) emailGhost.innerHTML = '';
+
+    // Phone country picker zpět na default (CZ +420)
+    const flagIcon = document.getElementById('phoneFlagIcon');
+    const flagCode = document.getElementById('phoneFlagCode');
+    const flagPrefix = document.getElementById('f-phone-prefix');
+    if (flagIcon) flagIcon.textContent = '🇨🇿';
+    if (flagCode) flagCode.textContent = '+420';
+    if (flagPrefix) flagPrefix.value = '+420';
+
+    // Skrýt jakoukoli formulářovou feedback
+    feedback.hidden = true;
+
+    // Date input — fire change event pro sync time pickeru
+    const dateInput = document.getElementById('f-date');
+    if (dateInput) dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     feedback.hidden = true;
@@ -1448,15 +1719,7 @@ function flashPricingError() {
         headers: { Accept: 'application/json' },
       });
       if (res.ok) {
-        showFeedback('success',
-          'Děkujeme — poptávka odeslána. Ozveme se do 24 hodin na váš e-mail.'
-        );
-        form.reset();
-        const variantBox = document.getElementById('bookingVariant');
-        if (variantBox) variantBox.hidden = true;
-        document.querySelectorAll('.price-cell.is-selected').forEach((c) =>
-          c.classList.remove('is-selected')
-        );
+        showSuccessAndReset();
       } else {
         // Pokus o JSON, fallback na text
         const text = await res.text();
@@ -1485,9 +1748,19 @@ function flashPricingError() {
 })();
 
 /* =========================================================
-   MAP — Leaflet + Carto Positron, custom rust pin + štítek
+   MAP — Leaflet + Carto Positron, lazy-loaded při dorolování
    ========================================================= */
-(function initMap() {
+(function setupMap() {
+  const el = document.getElementById('mapCanvas');
+  if (!el) return;
+  window.dilnaLazyLib.loadOnIntersection(el, '400px', async () => {
+    await window.dilnaLazyLib.loadCSS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+    await window.dilnaLazyLib.loadJS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
+    initMap();
+  });
+})();
+
+function initMap() {
   const el = document.getElementById('mapCanvas');
   if (!el || typeof L === 'undefined') return;
 
@@ -1518,5 +1791,5 @@ function flashPricingError() {
     iconAnchor: [0, 0],
   });
   L.marker(COORDS, { icon: pinIcon, keyboard: false, interactive: false }).addTo(map);
-})();
+}
 
