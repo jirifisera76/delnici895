@@ -113,12 +113,12 @@ button { font: inherit; cursor: pointer; }
 }
 
 /* Crossfade mezi originálem a overlay: opacity místo display, oba pořád v DOM */
-.nav__menu a[href="#rezervace"] {
+.nav__menu a[href="#cenik"] {
   transition:
     transform 0.35s var(--t-ease),
     opacity 0.3s ease;
 }
-.nav__menu a[href="#rezervace"].is-hidden-orig {
+.nav__menu a[href="#cenik"].is-hidden-orig {
   opacity: 0;
   pointer-events: none;
 }
@@ -1555,7 +1555,23 @@ button { font: inherit; cursor: pointer; }
 }
 
 @media (max-width: 1024px) {
-  .booking__layout { grid-template-columns: 1fr; gap: 3rem; }
+  /* Mobile: kalendář dáme nad formulář (správná posloupnost workflow:
+     vyber cenu → vyber datum v kalendáři → vyplň formulář → odešli).
+     display: contents na column wrapperech rozpustí grid wrappery,
+     takže můžeme přímo ordrovat jednotlivé prvky uvnitř flex containeru. */
+  .booking__layout {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+  .booking__form-col,
+  .booking__calendar-col { display: contents; }
+  #calendar { order: 1; }
+  .booking__variant { order: 2; }
+  .booking__form-col .form { order: 3; }
+  .booking-form__total { order: 4; }
+  .booking-form__submit { order: 5; }
+  .form__feedback { order: 6; }
 }
 
 .form {
@@ -1834,36 +1850,56 @@ button { font: inherit; cursor: pointer; }
 .booking-form__total-detail {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.5rem;
   font-size: 0.82rem;
   line-height: 1.35;
+  margin-top: 0.4rem;
 }
 .booking-form__total-detail:empty { display: none; }
-.booking-form__total-detail .total-row {
-  display: block;
-  opacity: 0.78;
+
+/* Položka v rozpisu — vlevo název + sub-info, vpravo částka */
+.booking-form__total-detail .total-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.16);
 }
-.booking-form__total-detail .total-row--time {
+.booking-form__total-detail .total-line:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.booking-form__total-detail .total-line__label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.booking-form__total-detail .total-line__name {
   font-family: var(--display);
+  font-size: 0.92rem;
   letter-spacing: 0.05em;
-  font-size: 0.95rem;
-  opacity: 1;
   color: var(--paper);
 }
-.booking-form__total-detail .total-row--overtime {
-  margin-top: 0.45rem;
-  padding-top: 0.45rem;
-  border-top: 1px dashed rgba(255, 255, 255, 0.18);
-  color: var(--rust);
-  opacity: 1;
-  font-family: var(--display);
+.booking-form__total-detail .total-line__sub {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
   letter-spacing: 0.04em;
+  line-height: 1.4;
 }
-.booking-form__total-detail em {
-  font-style: normal;
-  opacity: 0.7;
-  margin-left: 0.25rem;
+.booking-form__total-detail .total-line__amount {
+  font-family: var(--display);
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  color: var(--paper);
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
+/* Addon položky (přesčas, crew) — bílý text stejně jako základ;
+   rust akcent zůstává jen u DPH a finální ceny S DPH. */
 
 .booking-form__total-amount {
   display: flex;
@@ -1915,14 +1951,14 @@ button { font: inherit; cursor: pointer; }
 }
 
 /* Overtime field — pronájem mimo provozní dobu */
-.overtime-field { cursor: default !important; }
-.overtime-toggle {
+.overtime-field, .crew-field { cursor: default !important; }
+.overtime-toggle, .crew-toggle {
   display: flex;
   align-items: flex-start;
   gap: 0.7rem;
   cursor: pointer;
 }
-.overtime-toggle input[type="checkbox"] {
+.overtime-toggle input[type="checkbox"], .crew-toggle input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   width: 18px;
@@ -1935,11 +1971,11 @@ button { font: inherit; cursor: pointer; }
   position: relative;
   transition: border-color 0.18s ease, background 0.18s ease;
 }
-.overtime-toggle input[type="checkbox"]:checked {
+.overtime-toggle input[type="checkbox"]:checked, .crew-toggle input[type="checkbox"]:checked {
   background: var(--rust);
   border-color: var(--rust);
 }
-.overtime-toggle input[type="checkbox"]:checked::after {
+.overtime-toggle input[type="checkbox"]:checked::after, .crew-toggle input[type="checkbox"]:checked::after {
   content: "";
   position: absolute;
   left: 5px;
@@ -1950,21 +1986,26 @@ button { font: inherit; cursor: pointer; }
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
-.overtime-toggle__text { display: flex; flex-direction: column; gap: 0.15rem; }
-.overtime-toggle__text strong {
+.overtime-toggle__text, .crew-toggle__text { display: flex; flex-direction: column; gap: 0.2rem; }
+.overtime-toggle__text strong, .crew-toggle__text strong {
   font-family: var(--display);
-  font-size: 0.95rem;
+  font-size: 0.82rem;
   font-weight: 400;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  line-height: 1.2;
 }
-.overtime-toggle__text small {
-  font-size: 0.78rem;
+.overtime-toggle__text small, .crew-toggle__text small {
+  display: block;
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
   opacity: 0.6;
-  line-height: 1.4;
+  line-height: 1.45;
+  text-transform: none;
 }
 
-.overtime-detail {
+.overtime-detail, .crew-detail {
   margin-top: 0.9rem;
   padding-top: 0.9rem;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -1972,7 +2013,92 @@ button { font: inherit; cursor: pointer; }
   flex-direction: column;
   gap: 0.7rem;
 }
-.overtime-detail[hidden] { display: none; }
+.overtime-detail[hidden], .crew-detail[hidden] { display: none; }
+
+/* Crew options — grid s checkboxy stylovanými jako pillové buttony,
+   vizuálně laděné s .time-slot v hodinovém pickeru */
+.crew-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.4rem;
+}
+.crew-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+.crew-option:hover {
+  border-color: var(--rust);
+  background: rgba(214, 80, 49, 0.08);
+}
+.crew-option input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+.crew-option:has(input:checked) {
+  background: rgba(214, 80, 49, 0.22);
+  border-color: var(--rust);
+}
+.crew-option__name {
+  font-family: var(--display);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--paper);
+}
+.crew-option__rate {
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+}
+.crew-option:has(input:checked) .crew-option__rate { color: var(--rust); }
+
+#f-crew-msg {
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--paper);
+  padding: 0.7rem 0.85rem;
+  font-family: var(--sans);
+  font-size: 0.92rem;
+  resize: vertical;
+  min-height: 70px;
+}
+#f-crew-msg:focus { outline: 0; border-color: var(--rust); }
+
+.crew-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(214, 80, 49, 0.08);
+  border-left: 2px solid var(--rust);
+}
+.crew-summary__calc {
+  font-family: var(--display);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--paper);
+  line-height: 1.35;
+}
+.crew-summary__hint {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-style: italic;
+  line-height: 1.4;
+}
 
 .overtime-times {
   display: flex;
@@ -2079,6 +2205,23 @@ button { font: inherit; cursor: pointer; }
   /* Časy mimo provozní dobu (typické pro přesčas) — zvýrazněné */
   color: var(--paper);
 }
+/* Busy: oba sousední přesčas-sloty obsazené → bod nelze vybrat,
+   červený (jako v hlavní tabulce / kalendáři). */
+.time-pop__opt--busy {
+  color: rgba(239, 68, 68, 0.7);
+  background: rgba(239, 68, 68, 0.08);
+  text-decoration: line-through;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+.time-pop__opt--busy:hover {
+  background: rgba(239, 68, 68, 0.08);
+  color: rgba(239, 68, 68, 0.7);
+}
+/* Partially busy: jeden sousední slot obsazený — bod jde vybrat, ale je vizuálně tlumený */
+.time-pop__opt--partial {
+  color: rgba(255, 200, 200, 0.55);
+}
 .time-pop__opt.is-selected {
   background: var(--rust);
   color: var(--paper);
@@ -2100,9 +2243,9 @@ button { font: inherit; cursor: pointer; }
 .overtime-summary {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.6rem 0.8rem;
-  background: rgba(214, 80, 49, 0.1);
+  gap: 0.3rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(214, 80, 49, 0.08);
   border-left: 2px solid var(--rust);
 }
 .overtime-rate {
@@ -2113,9 +2256,10 @@ button { font: inherit; cursor: pointer; }
   color: var(--rust);
 }
 .overtime-calc {
-  font-size: 0.85rem;
+  font-family: var(--display);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
   color: var(--paper);
-  opacity: 0.85;
   line-height: 1.35;
 }
 .overtime-calc:empty { display: none; }
@@ -2166,6 +2310,7 @@ button { font: inherit; cursor: pointer; }
   display: inline-block;
 }
 .time-slot {
+  position: relative;
   appearance: none;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -2191,6 +2336,22 @@ button { font: inherit; cursor: pointer; }
   border-color: rgba(239, 68, 68, 0.28);
 }
 .time-slot--busy:hover { border-color: rgba(239, 68, 68, 0.28); background: rgba(239, 68, 68, 0.1); }
+/* Částečně obsazený paušální blok — varovné zbarvení (amber), ale klikatelný.
+   Po výběru se ukáže hláška "Tento termín je částečně obsazený…" */
+.time-slot--partial {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.45);
+}
+.time-slot--partial:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.7);
+}
+.time-slot--partial.time-slot--selected,
+.time-slot--partial.time-slot--selected:hover {
+  /* Pokud uživatel partial blok vybere, drží rust selected styling */
+  background: var(--rust);
+  border-color: var(--rust);
+}
 /* Zakázaná délka rezervace (0,5 h nebo 1,5 h) — bod existuje, ale klik na něj
    by porušil pravidla. Vizuálně tlumený, není klikatelný, native title tooltip. */
 .time-slot--disabled {
@@ -2203,6 +2364,51 @@ button { font: inherit; cursor: pointer; }
 .time-slot--disabled:hover {
   background: rgba(255, 255, 255, 0.03);
   border-color: rgba(255, 255, 255, 0.08);
+}
+/* Custom tooltip nad zšedlým slotem — vyskakovací bublina s důvodem */
+.time-slot--disabled[data-tooltip]::after,
+.time-slot--disabled[data-tooltip]::before {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease 0.05s, visibility 0.15s ease 0.05s;
+  pointer-events: none;
+  z-index: 100;
+}
+.time-slot--disabled[data-tooltip]::after {
+  content: attr(data-tooltip);
+  transform: translateX(-50%);
+  background: #0e0e0e;
+  color: var(--paper);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 2px solid var(--rust);
+  padding: 0.55rem 0.8rem 0.55rem 0.7rem;
+  font-family: var(--display);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  font-weight: 400;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+}
+.time-slot--disabled[data-tooltip]::before {
+  /* Šipka pod bublinou */
+  content: "";
+  bottom: calc(100% + 1px);
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+  border-top-color: #0e0e0e;
+}
+.time-slot--disabled[data-tooltip]:hover::after,
+.time-slot--disabled[data-tooltip]:hover::before,
+.time-slot--disabled[data-tooltip]:focus-visible::after,
+.time-slot--disabled[data-tooltip]:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
 }
 .time-slot--in-range {
   background: rgba(214, 80, 49, 0.32);

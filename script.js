@@ -79,7 +79,7 @@ window.dilnaAvailability = (function () {
   // Google Sheets CSV endpoint — publikovaný "Comma-separated values" sheet.
   // Aneta upravuje sheet, web pulluje data každých 5 minut + při návratu na tab.
   const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT_r8X0goY7mPPYb2QYyuHn4Gk7_UjQNLsqEiktDvaUnv_GNxG-_iXvoWh582qteY6wlvhupDpaUCN_/pub?output=csv';
-  const CACHE_KEY = 'dilna-bookings-v2';
+  const CACHE_KEY = 'dilna-bookings-v3';
   const CACHE_TTL_MS = 5 * 60 * 1000;
 
   // bookingsByDate: Map<"YYYY-MM-DD", [{ space, hours: [int, int, ...] }]>
@@ -95,15 +95,17 @@ window.dilnaAvailability = (function () {
     return a;
   }
   function pad2(n) { return n < 10 ? '0' + n : '' + n; }
-  // "HH:MM" → slot index (0 = HOURLY_START), null pokud mimo rozsah
+  // "HH:MM" → slot index (0 = HOURLY_START). Časy mimo provozní okno
+  // (např. 04:00 nebo 23:00 ve sheetu) klampujeme na nejbližší okraj —
+  // to umožní zapsat "celý den" obecnými čísly bez null.
   function timeToSlot(t) {
     if (!t) return null;
     const parts = String(t).split(':');
     const hh = parseInt(parts[0], 10);
     const mm = parseInt(parts[1] || '0', 10);
     if (isNaN(hh) || isNaN(mm)) return null;
-    if (hh < HOURLY_START || hh > HOURLY_END) return null;
-    if (hh === HOURLY_END && mm > 0) return null;
+    if (hh < HOURLY_START) return 0;
+    if (hh > HOURLY_END || (hh === HOURLY_END && mm > 0)) return TOTAL_SLOTS;
     return (hh - HOURLY_START) * SLOTS_PER_HOUR + Math.floor(mm / SLOT_MIN);
   }
   function slotToTime(slot) {
@@ -157,6 +159,16 @@ window.dilnaAvailability = (function () {
     return s.replace(/[‐-―−]/g, '-');
   }
 
+  // "HH:MM" → minuty od půlnoci (na rozdíl od timeToSlot bez clampingu).
+  function toMinutes(t) {
+    if (!t) return null;
+    const parts = String(t).split(':');
+    const hh = parseInt(parts[0], 10);
+    const mm = parseInt(parts[1] || '0', 10);
+    if (isNaN(hh) || isNaN(mm)) return null;
+    return hh * 60 + mm;
+  }
+
   // ===== Row → bookings transformace (slot-based, 30 min granularita) =====
   function rowsToBookings(rows) {
     const map = new Map();
@@ -166,15 +178,68 @@ window.dilnaAvailability = (function () {
       const od = (row.od || '').trim();
       const doStr = (row['do'] || '').trim();
       if (!date || !space || !od || !doStr) return;
+      const odMin = toMinutes(od);
+      const doMin = toMinutes(doStr);
+      if (odMin == null || doMin == null || doMin <= odMin) return;
       const fromSlot = timeToSlot(od);
       const toSlot = timeToSlot(doStr);
-      if (fromSlot == null || toSlot == null || toSlot <= fromSlot) return;
       const slots = [];
-      for (let s = fromSlot; s < toSlot; s++) slots.push(s);
+      if (fromSlot != null && toSlot != null && toSlot > fromSlot) {
+        for (let s = fromSlot; s < toSlot; s++) slots.push(s);
+      }
+      // Přesahy mimo provozní okno (8:00–22:00) si držíme zvlášť pro overtime
+      // dropdown — uložíme jako [startMin, endMin] absolute v dané dni.
+      const overtimeRanges = [];
+      const winStart = HOURLY_START * 60; // 480
+      const winEnd = HOURLY_END * 60;     // 1320
+      if (odMin < winStart) overtimeRanges.push([odMin, Math.min(doMin, winStart)]);
+      if (doMin > winEnd) overtimeRanges.push([Math.max(odMin, winEnd), doMin]);
       if (!map.has(date)) map.set(date, []);
-      map.get(date).push({ space, slots });
+      map.get(date).push({ space, slots, overtimeRanges });
     });
     return map;
+  }
+
+  // Posun ISO datumu o N dní (kvůli overtime bookings, které sahají do dalšího dne).
+  function addDaysISO(dateISO, days) {
+    if (!dateISO) return null;
+    const [y, m, d] = dateISO.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + days);
+    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+  }
+
+  // Overtime busy detection — vrací Set indexů přesčasových půlhodinových slotů
+  // (slot 0 = HOURLY_END:00 form data, poslední = HOURLY_START následujícího dne).
+  // Délka odvozená dynamicky z provozního okna ((24-22 + 8)*2 = 20 slotů).
+  const OVERTIME_TOTAL_SLOTS = ((24 - HOURLY_END) + HOURLY_START) * 2;
+  function getOvertimeBusySlots(formDateISO, space) {
+    const busy = new Set();
+    if (!formDateISO || !space) return busy;
+    function applyRanges(ranges, offsetMin) {
+      ranges.forEach(([s, e]) => {
+        const startSlot = Math.floor((s + offsetMin) / 30);
+        const endSlot = Math.ceil((e + offsetMin) / 30);
+        for (let i = startSlot; i < endSlot; i++) {
+          if (i >= 0 && i < OVERTIME_TOTAL_SLOTS) busy.add(i);
+        }
+      });
+    }
+    // Večerní overtime z form data — minuty 1320–1440 → unif. 0–120 (offset −1320)
+    const formDay = bookingsByDate.get(formDateISO) || [];
+    formDay.forEach((b) => {
+      if (!conflicts(b.space, space)) return;
+      const eveRanges = (b.overtimeRanges || []).filter(([s]) => s >= HOURLY_END * 60);
+      applyRanges(eveRanges, -HOURLY_END * 60);
+    });
+    // Ranní overtime z následujícího dne — minuty 0–420 → unif. 120–540 (offset +120)
+    const nextDay = bookingsByDate.get(addDaysISO(formDateISO, 1)) || [];
+    nextDay.forEach((b) => {
+      if (!conflicts(b.space, space)) return;
+      const morRanges = (b.overtimeRanges || []).filter(([_s, e]) => e <= HOURLY_START * 60);
+      applyRanges(morRanges, (24 - HOURLY_END) * 60);
+    });
+    return busy;
   }
 
   // ===== Cache (localStorage, 5min TTL) =====
@@ -258,6 +323,7 @@ window.dilnaAvailability = (function () {
     getBusySlots,
     getDayStatus,
     getRawBookings,
+    getOvertimeBusySlots,
     loadFromSheet,
     isLoaded: () => isLoaded,
     HOURLY_START,
@@ -265,6 +331,7 @@ window.dilnaAvailability = (function () {
     SLOT_MIN,
     SLOTS_PER_HOUR,
     TOTAL_SLOTS,
+    OVERTIME_TOTAL_SLOTS,
     timeToSlot,
     slotToTime,
     SPACES: { STUDIO: SPACE_STUDIO, PODCAST: SPACE_PODCAST, WHOLE: SPACE_WHOLE },
@@ -658,7 +725,7 @@ if ('IntersectionObserver' in window) {
    ========================================================= */
 (function initNavCtaOverlay() {
   const overlay = document.querySelector('.nav-cta');
-  const original = document.querySelector('.nav__menu a[href="#rezervace"]');
+  const original = document.querySelector('.nav__menu a[href="#cenik"]');
   const marquee = document.querySelector('.marquee');
   const booking = document.querySelector('.booking');
   const nav = document.querySelector('.nav');
@@ -1046,7 +1113,7 @@ if ('IntersectionObserver' in window) {
     selectedTier = null;
     if (hintEl) {
       hintEl.textContent =
-        'Vyber cenu výše — kalendář ti ukáže vytíženost vybraného prostoru.';
+        'Vyberte cenu výše — kalendář ukáže vytíženost vybraného prostoru.';
     }
     render();
     document.dispatchEvent(new CustomEvent('calendar:rerender'));
@@ -1498,24 +1565,22 @@ function initTour() {
 
   function fmt(n) { return Math.round(n).toLocaleString('cs-CZ') + ' Kč'; }
 
-  // Globální stav celkové ceny — time picker zapisuje base, overtime IIFE addon.
+  // Globální stav celkové ceny — time picker zapisuje base, overtime IIFE addon, crew IIFE addon.
   if (!window.dilnaTotal) {
     window.dilnaTotal = {
-      base: 0, baseDetail: '',
-      overtime: 0, overtimeDetail: '',
+      base: 0, baseDetail: '', baseHours: 0,
+      overtime: 0, overtimeDetail: '', overtimeHours: 0,
+      crew: 0, crewDetail: '',
       render() {
         if (!totalBox) return;
-        const sum = this.base + this.overtime;
+        const sum = this.base + this.overtime + this.crew;
         if (sum === 0) { totalBox.hidden = true; return; }
         const vat = sum * VAT_RATE;
         const grand = sum + vat;
         if (totalDetail) {
-          // baseDetail i overtimeDetail jsou HTML stringy se strukturou
-          // <span class="row">...</span>; render je staví pod sebe.
           let html = this.baseDetail || '';
-          if (this.overtime > 0 && this.overtimeDetail) {
-            html += this.overtimeDetail;
-          }
+          if (this.overtime > 0 && this.overtimeDetail) html += this.overtimeDetail;
+          if (this.crew > 0 && this.crewDetail) html += this.crewDetail;
           totalDetail.innerHTML = html;
         }
         if (totalPrice) totalPrice.textContent = fmt(sum);
@@ -1526,15 +1591,19 @@ function initTour() {
     };
   }
 
-  function showTotal(detail, total) {
+  function showTotal(detail, total, hours) {
     window.dilnaTotal.base = total;
     window.dilnaTotal.baseDetail = detail;
+    window.dilnaTotal.baseHours = hours || 0;
     window.dilnaTotal.render();
+    document.dispatchEvent(new CustomEvent('time:change'));
   }
   function hideTotal() {
     window.dilnaTotal.base = 0;
     window.dilnaTotal.baseDetail = '';
+    window.dilnaTotal.baseHours = 0;
     window.dilnaTotal.render();
+    document.dispatchEvent(new CustomEvent('time:change'));
   }
 
   function render() {
@@ -1608,7 +1677,8 @@ function initTour() {
         btn.classList.add('time-slot--busy');
       } else if (invalidDuration) {
         btn.classList.add('time-slot--disabled');
-        btn.setAttribute('title', 'Min. 1 h, od 2 h prodlužujete po půl hodině.');
+        btn.setAttribute('data-tooltip', 'Min. 1 h, od 2 h prodlužujete po půl hodině.');
+        btn.setAttribute('aria-label', `${slotToTime(p)} — Min. 1 h, od 2 h prodlužujete po půl hodině.`);
       } else {
         btn.addEventListener('click', () => onSlotClick(p, busy));
       }
@@ -1633,10 +1703,16 @@ function initTour() {
       const fromT = slotToTime(pickStart);
       const toT = slotToTime(pickEnd);
       const realH = (slots * 0.5).toLocaleString('cs-CZ', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+      const amountStr = Math.round(total).toLocaleString('cs-CZ') + ' Kč';
       const detail =
-        `<span class="total-row total-row--time">${fromT}–${toT}</span>` +
-        `<span class="total-row">${realH} h × ${basePrice().toLocaleString('cs-CZ')} Kč/h</span>`;
-      showTotal(detail, total);
+        `<div class="total-line">` +
+          `<div class="total-line__label">` +
+            `<span class="total-line__name">${space} · ${realH} h</span>` +
+            `<span class="total-line__sub">${fromT}–${toT} · ${basePrice().toLocaleString('cs-CZ')} Kč/h</span>` +
+          `</div>` +
+          `<span class="total-line__amount">${amountStr}</span>` +
+        `</div>`;
+      showTotal(detail, total, slots * 0.5);
       writeForm(fromT, toT, total);
     } else {
       hideTotal();
@@ -1719,9 +1795,16 @@ function initTour() {
   // Sjednocená warning hláška pro busy bloky (půldenní i celodenní)
   const BUSY_WARNING = 'Tento termín je částečně obsazený. Pošlete nezávaznou poptávku — ozveme se vám s možnostmi.';
 
-  function blockHasBusy(fromSlot, toSlot, busy) {
-    for (let s = fromSlot; s < toSlot; s++) if (busy.has(s)) return true;
-    return false;
+  // Pro paušální bloky (Mini, Půldenní, Celodenní) rozlišujeme tři stavy:
+  //   'free'    — všechny sloty volné, plně dostupný blok
+  //   'partial' — některé sloty obsazené → blok lze vybrat s upozorněním
+  //   'full'    — všechny sloty obsazené → blok nelze vybrat
+  function blockStatus(fromSlot, toSlot, busy) {
+    let busyCount = 0;
+    for (let s = fromSlot; s < toSlot; s++) if (busy.has(s)) busyCount++;
+    if (busyCount === 0) return 'free';
+    if (busyCount === toSlot - fromSlot) return 'full';
+    return 'partial';
   }
 
   function renderMini(busy) {
@@ -1733,36 +1816,44 @@ function initTour() {
       btn.className = 'time-slot time-slot--block';
       const fromT = slotToTime(opt.fromSlot);
       const toT = slotToTime(opt.toSlot);
-      const isBusy = blockHasBusy(opt.fromSlot, opt.toSlot, busy);
+      const status = blockStatus(opt.fromSlot, opt.toSlot, busy);
       btn.innerHTML = `${opt.label}<span class="time-slot__sub">${fromT}–${toT} · 4 h</span>`;
-      if (isBusy) btn.classList.add('time-slot--busy');
+      if (status === 'full') btn.classList.add('time-slot--busy');
+      else if (status === 'partial') btn.classList.add('time-slot--partial');
       if (pickStart === opt.fromSlot && pickEnd === opt.toSlot) btn.classList.add('time-slot--selected');
-      btn.addEventListener('click', () => {
-        pickStart = opt.fromSlot;
-        pickEnd = opt.toSlot;
-        render();
-      });
+      if (status !== 'full') {
+        btn.addEventListener('click', () => {
+          pickStart = opt.fromSlot;
+          pickEnd = opt.toSlot;
+          render();
+        });
+      }
       row.appendChild(btn);
     });
     root.appendChild(row);
 
-    let pickedIsBusy = false;
     if (pickStart !== null) {
-      pickedIsBusy = blockHasBusy(pickStart, pickEnd, busy);
+      const pickedStatus = blockStatus(pickStart, pickEnd, busy);
+      if (pickedStatus === 'partial') appendBusyWarning();
     }
-    if (pickedIsBusy) appendBusyWarning();
 
     if (pickStart !== null) {
+      const amountStr = Math.round(basePrice()).toLocaleString('cs-CZ') + ' Kč';
       const detail =
-        `<span class="total-row total-row--time">${slotToTime(pickStart)}–${slotToTime(pickEnd)}</span>` +
-        `<span class="total-row">Mini blok · 4 h</span>`;
-      showTotal(detail, basePrice());
+        `<div class="total-line">` +
+          `<div class="total-line__label">` +
+            `<span class="total-line__name">${space} · Mini blok 4 h</span>` +
+            `<span class="total-line__sub">${slotToTime(pickStart)}–${slotToTime(pickEnd)}</span>` +
+          `</div>` +
+          `<span class="total-line__amount">${amountStr}</span>` +
+        `</div>`;
+      showTotal(detail, basePrice(), 4);
       writeForm(slotToTime(pickStart), slotToTime(pickEnd), basePrice());
     } else {
       hideTotal();
       const hint = document.createElement('p');
       hint.className = 'time-picker__hint';
-      hint.textContent = 'Vyber Ráno (8–12), Odpoledne (13–17) nebo Večer (18–22) — 4 h.';
+      hint.textContent = 'Vyberte Ráno (8–12), Odpoledne (13–17) nebo Večer (18–22) — 4 h.';
       root.appendChild(hint);
     }
   }
@@ -1776,30 +1867,38 @@ function initTour() {
       btn.className = 'time-slot time-slot--block';
       const fromT = slotToTime(opt.fromSlot);
       const toT = slotToTime(opt.toSlot);
-      const isBusy = blockHasBusy(opt.fromSlot, opt.toSlot, busy);
+      const status = blockStatus(opt.fromSlot, opt.toSlot, busy);
       btn.innerHTML = `${opt.label}<span class="time-slot__sub">${fromT}–${toT} · 7 h</span>`;
-      if (isBusy) btn.classList.add('time-slot--busy');
+      if (status === 'full') btn.classList.add('time-slot--busy');
+      else if (status === 'partial') btn.classList.add('time-slot--partial');
       if (pickStart === opt.fromSlot && pickEnd === opt.toSlot) btn.classList.add('time-slot--selected');
-      btn.addEventListener('click', () => {
-        pickStart = opt.fromSlot;
-        pickEnd = opt.toSlot;
-        render();
-      });
+      if (status !== 'full') {
+        btn.addEventListener('click', () => {
+          pickStart = opt.fromSlot;
+          pickEnd = opt.toSlot;
+          render();
+        });
+      }
       row.appendChild(btn);
     });
     root.appendChild(row);
 
-    let pickedIsBusy = false;
     if (pickStart !== null) {
-      pickedIsBusy = blockHasBusy(pickStart, pickEnd, busy);
+      const pickedStatus = blockStatus(pickStart, pickEnd, busy);
+      if (pickedStatus === 'partial') appendBusyWarning();
     }
-    if (pickedIsBusy) appendBusyWarning();
 
     if (pickStart !== null) {
+      const amountStr = Math.round(basePrice()).toLocaleString('cs-CZ') + ' Kč';
       const detail =
-        `<span class="total-row total-row--time">${slotToTime(pickStart)}–${slotToTime(pickEnd)}</span>` +
-        `<span class="total-row">Půldenní paušál · 7 h</span>`;
-      showTotal(detail, basePrice());
+        `<div class="total-line">` +
+          `<div class="total-line__label">` +
+            `<span class="total-line__name">${space} · Půldenní 7 h</span>` +
+            `<span class="total-line__sub">${slotToTime(pickStart)}–${slotToTime(pickEnd)}</span>` +
+          `</div>` +
+          `<span class="total-line__amount">${amountStr}</span>` +
+        `</div>`;
+      showTotal(detail, basePrice(), 7);
       writeForm(slotToTime(pickStart), slotToTime(pickEnd), basePrice());
     } else {
       hideTotal();
@@ -1813,28 +1912,37 @@ function initTour() {
   function renderFullDay(busy) {
     const fromSlot = FULL_DAY.fromSlot;
     const toSlot = FULL_DAY.toSlot;
-    const isBusy = blockHasBusy(fromSlot, toSlot, busy);
+    const status = blockStatus(fromSlot, toSlot, busy);
     const row = document.createElement('div');
     row.className = 'time-picker__row';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'time-slot time-slot--block';
     btn.innerHTML = `Celý den<span class="time-slot__sub">${slotToTime(fromSlot)}–${slotToTime(toSlot)} · 14 h</span>`;
-    if (isBusy) btn.classList.add('time-slot--busy');
+    if (status === 'full') btn.classList.add('time-slot--busy');
+    else if (status === 'partial') btn.classList.add('time-slot--partial');
     if (pickStart === fromSlot && pickEnd === toSlot) btn.classList.add('time-slot--selected');
-    btn.addEventListener('click', () => {
-      pickStart = fromSlot; pickEnd = toSlot; render();
-    });
+    if (status !== 'full') {
+      btn.addEventListener('click', () => {
+        pickStart = fromSlot; pickEnd = toSlot; render();
+      });
+    }
     row.appendChild(btn);
     root.appendChild(row);
 
-    if (isBusy && pickStart !== null) appendBusyWarning();
+    if (status === 'partial' && pickStart !== null) appendBusyWarning();
 
     if (pickStart !== null) {
+      const amountStr = Math.round(basePrice()).toLocaleString('cs-CZ') + ' Kč';
       const detail =
-        `<span class="total-row total-row--time">${slotToTime(pickStart)}–${slotToTime(pickEnd)}</span>` +
-        `<span class="total-row">Celodenní paušál · 14 h</span>`;
-      showTotal(detail, basePrice());
+        `<div class="total-line">` +
+          `<div class="total-line__label">` +
+            `<span class="total-line__name">${space} · Celodenní 14 h</span>` +
+            `<span class="total-line__sub">${slotToTime(pickStart)}–${slotToTime(pickEnd)}</span>` +
+          `</div>` +
+          `<span class="total-line__amount">${amountStr}</span>` +
+        `</div>`;
+      showTotal(detail, basePrice(), 14);
       writeForm(slotToTime(pickStart), slotToTime(pickEnd), basePrice());
     } else {
       hideTotal();
@@ -1956,12 +2064,11 @@ function flashPricingError() {
   const pad2 = (n) => String(n).padStart(2, '0');
 
   // Přesčas-times: pouze mimo provozní dobu (8:00–22:00).
-  // Tedy 22:00, 22:30, … 23:30, 00:00, 00:30, … 06:30, 07:00.
-  // Generujeme posloupností v minutách s wrap přes půlnoc (start = 22:00, end = 07:00 + 24 h).
+  // 22:00, 22:30, … 23:30, 00:00, 00:30, … 07:30, 08:00 (= start otevírací doby).
   function buildOvertimeOptions() {
     const opts = [];
     const startMin = 22 * 60;          // 22:00
-    const endMin = 7 * 60 + 24 * 60;   // 07:00 následující den
+    const endMin = 8 * 60 + 24 * 60;   // 08:00 následující den (= konec přesčasu, start provozu)
     for (let m = startMin; m <= endMin; m += 30) {
       const hh = Math.floor((m / 60) % 24);
       const mm = m % 60;
@@ -1971,14 +2078,18 @@ function flashPricingError() {
   }
 
   function setupTimePop({ btn, valueEl, menuEl, hiddenInput, onChange }) {
-    buildOvertimeOptions().forEach((v) => {
+    const opts = buildOvertimeOptions();
+    opts.forEach((v) => {
       const opt = document.createElement('button');
       opt.type = 'button';
       opt.className = 'time-pop__opt';
       opt.dataset.value = v;
       opt.setAttribute('role', 'option');
       opt.textContent = v;
-      opt.addEventListener('click', () => { select(v); close(); });
+      opt.addEventListener('click', () => {
+        if (opt.classList.contains('time-pop__opt--busy')) return; // sandwich = unselectable
+        select(v); close();
+      });
       menuEl.appendChild(opt);
     });
     function select(v) {
@@ -1994,10 +2105,26 @@ function flashPricingError() {
       hiddenInput.value = '';
       menuEl.querySelectorAll('.is-selected').forEach((o) => o.classList.remove('is-selected'));
     }
+    // Aplikace busy stavu z dilnaAvailability — busySlots je Set indexů
+    // 18 přesčasových půlhodinových slotů (0 = 22:00–22:30, 17 = 06:30–07:00).
+    // Každý čas. bod má slotBefore a slotAfter; pokud OBA jsou busy, bod nelze vybrat.
+    function applyBusy(busySlots) {
+      const allOpts = menuEl.querySelectorAll('.time-pop__opt');
+      const total = allOpts.length; // 19
+      allOpts.forEach((opt, idx) => {
+        const slotBefore = idx === 0 ? true : busySlots.has(idx - 1);
+        const slotAfter = idx === total - 1 ? true : busySlots.has(idx);
+        const sandwich = slotBefore && slotAfter;
+        opt.classList.toggle('time-pop__opt--busy', sandwich);
+        // Označme i jednostranně-busy (slot vedle je obsazený) menším vizuálem
+        const partial = (slotBefore || slotAfter) && !sandwich;
+        opt.classList.toggle('time-pop__opt--partial', partial);
+      });
+    }
     function open() {
       menuEl.hidden = false;
       btn.setAttribute('aria-expanded', 'true');
-      const sel = menuEl.querySelector('.is-selected') || menuEl.querySelector('.is-after-hours');
+      const sel = menuEl.querySelector('.is-selected');
       if (sel) sel.scrollIntoView({ block: 'center' });
     }
     function close() {
@@ -2014,7 +2141,7 @@ function flashPricingError() {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !menuEl.hidden) close();
     });
-    return { select, clear };
+    return { select, clear, applyBusy };
   }
 
   const fromPop = setupTimePop({ btn: fromBtn, valueEl: fromValueEl, menuEl: fromMenu, hiddenInput: fromInput, onChange: () => recompute() });
@@ -2068,46 +2195,176 @@ function flashPricingError() {
     const enabled = checkbox.checked;
     detail.hidden = !enabled;
     const rate = rateFor(space);
-    rateLabel.textContent = rate ? `Sazba ${fmtKc(rate)} / hod (+30 %)` : 'Vyber prostor v ceníku';
+    rateLabel.textContent = rate ? `Sazba ${fmtKc(rate)} / hod (+30 %)` : 'Vyberte prostor v ceníku';
     if (!enabled || !rate) {
       calcLabel.textContent = '';
       window.dilnaTotal.overtime = 0;
       window.dilnaTotal.overtimeDetail = '';
+      window.dilnaTotal.overtimeHours = 0;
       window.dilnaTotal.render();
+      document.dispatchEvent(new CustomEvent('time:change'));
       return;
     }
     const hours = billedHoursFromRange(fromInput.value, toInput.value);
     const overtimeAmount = hours * rate;
+    window.dilnaTotal.overtimeHours = hours;
     if (hours > 0) {
       const hoursStr = hours.toLocaleString('cs-CZ', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
       calcLabel.textContent = `${fromInput.value}–${toInput.value} · ${hoursStr} h × ${fmtKc(rate)} = ${fmtKc(overtimeAmount)}`;
       window.dilnaTotal.overtime = overtimeAmount;
       window.dilnaTotal.overtimeDetail =
-        `<span class="total-row total-row--overtime">+ přesčas ${fromInput.value}–${toInput.value}</span>` +
-        `<span class="total-row">${hoursStr} h × ${fmtKc(rate)}</span>`;
+        `<div class="total-line total-line--addon">` +
+          `<div class="total-line__label">` +
+            `<span class="total-line__name">Přesčas · ${hoursStr} h</span>` +
+            `<span class="total-line__sub">${fromInput.value}–${toInput.value} · ${fmtKc(rate)}/h (+30 %)</span>` +
+          `</div>` +
+          `<span class="total-line__amount">${fmtKc(overtimeAmount)}</span>` +
+        `</div>`;
     } else {
-      calcLabel.textContent = fromInput.value || toInput.value ? 'Vyplň oba časy.' : '';
+      calcLabel.textContent = fromInput.value || toInput.value ? 'Vyplňte oba časy.' : '';
       window.dilnaTotal.overtime = 0;
       window.dilnaTotal.overtimeDetail = '';
     }
     window.dilnaTotal.render();
+    document.dispatchEvent(new CustomEvent('time:change'));
   }
 
   checkbox.addEventListener('change', recompute);
 
+  // Sync busy stavu obou dropdownů s rezervacemi z Google Sheetu
+  // (form date + space → 18 půlhodinových slotů přesčasu, evening + morning).
+  const dateInput = document.getElementById('f-date');
+  let formDate = dateInput ? dateInput.value : '';
+  function refreshBusy() {
+    const busy = (window.dilnaAvailability && space && formDate)
+      ? window.dilnaAvailability.getOvertimeBusySlots(formDate, space)
+      : new Set();
+    if (fromPop.applyBusy) fromPop.applyBusy(busy);
+    if (toPop.applyBusy) toPop.applyBusy(busy);
+  }
+  refreshBusy();
+
   document.addEventListener('variant:select', (e) => {
     space = e.detail.space || null;
+    refreshBusy();
     recompute();
   });
   document.addEventListener('variant:clear', () => {
     space = null;
+    refreshBusy();
     recompute();
   });
+  if (dateInput) {
+    const onDate = () => {
+      formDate = dateInput.value || '';
+      refreshBusy();
+    };
+    dateInput.addEventListener('change', onDate);
+    dateInput.addEventListener('input', onDate);
+  }
+  document.addEventListener('availability:loaded', refreshBusy);
   document.addEventListener('booking:reset', () => {
     checkbox.checked = false;
     fromPop.clear();
     toPop.clear();
     space = null;
+    refreshBusy();
+    recompute();
+  });
+})();
+
+/* =========================================================
+   CREW — poptávka produkční / technické podpory
+   Multi-select profesí, orientační cena = sumOf(rates) × hodiny rezervace
+   (baseHours z time pickeru + overtimeHours z přesčasu).
+   ========================================================= */
+(function initCrew() {
+  const checkbox = document.getElementById('f-crew-enabled');
+  const detail = document.getElementById('crewDetail');
+  const calcLabel = document.getElementById('crewCalc');
+  const options = document.querySelectorAll('.crew-option input[type="checkbox"]');
+  if (!checkbox || !detail || !calcLabel || !options.length) return;
+
+  function fmtKc(n) { return Math.round(n).toLocaleString('cs-CZ') + ' Kč'; }
+
+  function totalHours() {
+    const a = (window.dilnaTotal && window.dilnaTotal.baseHours) || 0;
+    const b = (window.dilnaTotal && window.dilnaTotal.overtimeHours) || 0;
+    return a + b;
+  }
+
+  function recompute() {
+    const enabled = checkbox.checked;
+    detail.hidden = !enabled;
+    if (!enabled) {
+      calcLabel.textContent = '';
+      window.dilnaTotal.crew = 0;
+      window.dilnaTotal.crewDetail = '';
+      window.dilnaTotal.render();
+      return;
+    }
+    // Pro každou zatrženou roli načteme tři sazby: hodinovou, půldenní (5–7 h)
+    // a denní (8+ h). Tiered pricing: ≤4 h hodinová × hours; 4–7 h půldenní paušál;
+    // 7+ h denní paušál. Odpovídá běžnému pražskému trhu.
+    const selected = [];
+    options.forEach((opt) => {
+      if (opt.checked) {
+        const hourly = parseInt(opt.dataset.rate, 10) || 0;
+        const halfDay = parseInt(opt.dataset.halfDayRate, 10) || (hourly * 7);
+        const day = parseInt(opt.dataset.dayRate, 10) || (hourly * 14);
+        selected.push({ name: opt.value, hourly, halfDay, day });
+      }
+    });
+    const hours = totalHours();
+    function tierFor(h, r) {
+      if (h <= 4) return { fee: r.hourly * h, label: `${formatHours(h)} h × ${fmtKc(r.hourly)}/h` };
+      if (h <= 7) return { fee: r.halfDay, label: `Půldenní paušál (${formatHours(h)} h)` };
+      return { fee: r.day, label: `Denní paušál (${formatHours(h)} h)` };
+    }
+    function formatHours(h) {
+      return h.toLocaleString('cs-CZ', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+    }
+    if (selected.length === 0) {
+      calcLabel.textContent = 'Vyberte alespoň jednu profesi.';
+      window.dilnaTotal.crew = 0;
+      window.dilnaTotal.crewDetail = '';
+    } else if (hours === 0) {
+      const sumH = selected.reduce((a, r) => a + r.hourly, 0);
+      calcLabel.textContent = `${selected.map(r => r.name).join(', ')} · od ${fmtKc(sumH)}/h. Vyplňte čas pronájmu pro odhad ceny.`;
+      window.dilnaTotal.crew = 0;
+      window.dilnaTotal.crewDetail = '';
+    } else {
+      let totalCrew = 0;
+      let lines = '';
+      const tierName = hours <= 4 ? 'hodinová' : hours <= 7 ? 'půldenní' : 'denní';
+      selected.forEach((r) => {
+        const t = tierFor(hours, r);
+        totalCrew += t.fee;
+        lines +=
+          `<div class="total-line total-line--addon">` +
+            `<div class="total-line__label">` +
+              `<span class="total-line__name">${r.name}</span>` +
+              `<span class="total-line__sub">${t.label}</span>` +
+            `</div>` +
+            `<span class="total-line__amount">${fmtKc(t.fee)}</span>` +
+          `</div>`;
+      });
+      calcLabel.textContent = `${selected.map(r => r.name).join(', ')} · ${tierName} sazba (${formatHours(hours)} h) ≈ ${fmtKc(totalCrew)}`;
+      window.dilnaTotal.crew = totalCrew;
+      window.dilnaTotal.crewDetail = lines;
+    }
+    window.dilnaTotal.render();
+  }
+
+  checkbox.addEventListener('change', recompute);
+  options.forEach((opt) => opt.addEventListener('change', recompute));
+  document.addEventListener('time:change', recompute);
+
+  document.addEventListener('booking:reset', () => {
+    checkbox.checked = false;
+    options.forEach((opt) => { opt.checked = false; });
+    const msg = document.getElementById('f-crew-msg');
+    if (msg) msg.value = '';
     recompute();
   });
 })();

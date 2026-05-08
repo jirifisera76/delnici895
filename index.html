@@ -20,7 +20,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
   <!-- Leaflet a Pannellum CSS/JS se NACHÁZEJÍ LAZY z script.js až když user
        doroluje k mapě/360, ne na initial page load (300 KB šetříme). -->
-  <link rel="stylesheet" href="styles.css?v=105" />
+  <link rel="stylesheet" href="styles.css?v=116" />
 
   <meta property="og:title" content="Dílna — Industriální kreativní studio v Holešovicích" />
   <meta property="og:description" content="150 m² industriálního kreativního studia v Praze-Holešovicích pro natáčení, focení a produkci." />
@@ -426,8 +426,8 @@
             <label class="overtime-toggle">
               <input type="checkbox" id="f-overtime-enabled" name="prescas_zajem" />
               <span class="overtime-toggle__text">
-                <strong>Zašlete poptávku na pronájem mimo rozmezí 8:00–22:00</strong>
-                <small>Mimo provozní dobu účtujeme přirážku +30 % k hodinové sazbě.</small>
+                <strong>Zašlete poptávku na pronájem v rozmezí 22:00–8:00</strong>
+                <small>Mimo provozní dobu účtujeme +30% k hodinové sazbě</small>
               </span>
             </label>
             <div class="overtime-detail" id="overtimeDetail" hidden>
@@ -453,16 +453,70 @@
                 </div>
               </div>
               <div class="overtime-summary">
-                <span class="overtime-rate" id="overtimeRate">Vyber prostor v ceníku</span>
+                <span class="overtime-rate" id="overtimeRate">Vyberte prostor v ceníku</span>
                 <span class="overtime-calc" id="overtimeCalc"></span>
               </div>
               <p class="overtime-hint">Odhadovaná cena za přesčas se připočte k celkové ceně. Přesný čas potvrdíme po vašem kontaktu.</p>
             </div>
           </div>
 
+          <div class="field field--full crew-field">
+            <label class="crew-toggle">
+              <input type="checkbox" id="f-crew-enabled" name="crew_zajem" />
+              <span class="crew-toggle__text">
+                <strong>Poptávka produkční / technické podpory</strong>
+                <small>Doplňující profese — technik, osvětlovač, kameraman, fotograf</small>
+              </span>
+            </label>
+            <div class="crew-detail" id="crewDetail" hidden>
+              <div class="crew-options">
+                <label class="crew-option">
+                  <input type="checkbox" name="crew_role" value="Technik" data-rate="500" data-half-day-rate="2200" data-day-rate="3500" />
+                  <span class="crew-option__name">Technik</span>
+                  <span class="crew-option__rate">od 500 Kč/h</span>
+                </label>
+                <label class="crew-option">
+                  <input type="checkbox" name="crew_role" value="Osvětlovač" data-rate="800" data-half-day-rate="4000" data-day-rate="5500" />
+                  <span class="crew-option__name">Osvětlovač</span>
+                  <span class="crew-option__rate">od 800 Kč/h</span>
+                </label>
+                <label class="crew-option">
+                  <input type="checkbox" name="crew_role" value="Zvukař" data-rate="800" data-half-day-rate="4000" data-day-rate="5500" />
+                  <span class="crew-option__name">Zvukař</span>
+                  <span class="crew-option__rate">od 800 Kč/h</span>
+                </label>
+                <label class="crew-option">
+                  <input type="checkbox" name="crew_role" value="Kameraman" data-rate="1500" data-half-day-rate="7000" data-day-rate="12000" />
+                  <span class="crew-option__name">Kameraman</span>
+                  <span class="crew-option__rate">od 1 500 Kč/h</span>
+                </label>
+                <label class="crew-option">
+                  <input type="checkbox" name="crew_role" value="Fotograf" data-rate="1500" data-half-day-rate="7000" data-day-rate="12000" />
+                  <span class="crew-option__name">Fotograf</span>
+                  <span class="crew-option__rate">od 1 500 Kč/h</span>
+                </label>
+                <label class="crew-option">
+                  <input type="checkbox" name="crew_role" value="Make-up & styling" data-rate="1200" data-half-day-rate="5000" data-day-rate="8000" />
+                  <span class="crew-option__name">Make-up & styling</span>
+                  <span class="crew-option__rate">od 1 200 Kč/h</span>
+                </label>
+                <label class="crew-option">
+                  <input type="checkbox" name="crew_role" value="Produkční asistent" data-rate="400" data-half-day-rate="1700" data-day-rate="2800" />
+                  <span class="crew-option__name">Produkční asistent</span>
+                  <span class="crew-option__rate">od 400 Kč/h</span>
+                </label>
+              </div>
+              <textarea id="f-crew-msg" name="crew_zprava" rows="3" placeholder="Popište nám blíže, koho sháníte a co budete potřebovat."></textarea>
+              <div class="crew-summary">
+                <span class="crew-summary__calc" id="crewCalc">Vyberte alespoň jednu profesi.</span>
+                <span class="crew-summary__hint">Cena je orientační a bude upřesněna na základě konkrétní poptávky.</span>
+              </div>
+            </div>
+          </div>
+
           <div class="field field--full">
             <label for="f-msg">Zpráva <span class="field__optional">volitelné</span></label>
-            <textarea id="f-msg" name="zprava" rows="4" placeholder="Poznámky k poptávce — co plánujete, kolik lidí, jaká technika…"></textarea>
+            <textarea id="f-msg" name="zprava" rows="4" placeholder="Poznámky k poptávce – v případě specifických potřeb"></textarea>
           </div>
           </div>
         </div>
@@ -471,7 +525,7 @@
           <div class="calendar" id="calendar">
           <button type="button" class="calendar__lock" id="calendarLockBtn" aria-label="Nejdřív vyberte cenu v ceníku výše">
             <span class="calendar__lock-arrow" aria-hidden="true">↑</span>
-            <span class="calendar__lock-text">Vyber prostor a sazbu</span>
+            <span class="calendar__lock-text">Vyberte prostor a sazbu</span>
             <span class="calendar__lock-sub">Klikem otevřete ceník</span>
           </button>
           <div class="calendar__header">
@@ -488,7 +542,7 @@
             <li><span class="calendar__dot calendar__dot--partial"></span>Částečně</li>
             <li><span class="calendar__dot calendar__dot--busy"></span>Obsazeno</li>
           </ul>
-            <p class="calendar__hint" id="calendarHint">Vyber cenu výše — kalendář ti ukáže vytíženost vybraného prostoru.</p>
+            <p class="calendar__hint" id="calendarHint">Vyberte cenu výše — kalendář ukáže vytíženost vybraného prostoru.</p>
           </div>
 
           <div class="booking-form__total" id="formTotal" hidden>
@@ -575,6 +629,6 @@
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="script.js?v=105" defer></script>
+  <script src="script.js?v=116" defer></script>
 </body>
 </html>
