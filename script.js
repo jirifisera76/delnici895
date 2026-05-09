@@ -2710,3 +2710,299 @@ function initMap() {
     open: () => showSettings(loadConsent() || {}),
   };
 })();
+
+/* ===== GOOGLE REVIEWS =====
+   Načte recenze studia z Google Places API a vyrenderuje je do .reviews__list.
+   Vyžaduje:
+     1) GOOGLE_PLACE_ID — Place ID studia (najdete přes Google Place ID Finder).
+     2) GOOGLE_MAPS_API_KEY — API klíč s povolenými Maps JavaScript API + Places API,
+        omezený na referrer studiodilna.cz/*.
+   Lazy-load Maps JS pouze když se sekce dostane do viewportu (úspora ~150 kB
+   na první návštěvě). Po načtení API zavolá PlacesService.getDetails. */
+(function initGoogleReviews() {
+  const PLACE_ID = 'ChIJwWO-2q-VC0cRUxUEKXBwvhw';
+  const API_KEY  = 'AIzaSyC9Xh1zP08aeaVJ2Y3_TNSy5qfZaXY0wIQ';
+  const MAX_REVIEWS = 5;          // Google API vrací max 5
+
+  const list = document.getElementById('googleReviewsList');
+  const ratingBox = document.getElementById('googleRatingSummary');
+  const ratingValue = document.getElementById('googleRatingValue');
+  const ratingCount = document.getElementById('googleRatingCount');
+  const starsFill = document.getElementById('googleStarsFill');
+  const allLink = document.getElementById('reviewsAllLink');
+  if (!list) return;
+
+  // Pokud klíče zatím nejsou, zobraz „připravujeme" placeholder a nedělej nic.
+  if (!PLACE_ID || !API_KEY) {
+    list.innerHTML = '<li class="review review--placeholder"><p class="review__quote">Recenze z Google se zobrazí, jakmile bude napojení dokončeno.</p></li>';
+    return;
+  }
+
+  // Aktualizuj odkazy na Google profil
+  if (allLink) allLink.href = 'https://search.google.com/local/reviews?placeid=' + encodeURIComponent(PLACE_ID);
+  // Place ID se použije i v modálu pro Google CTA
+  window.__dilnaPlaceId = PLACE_ID;
+
+  let mapsLoading = false;
+  let mapsLoaded = !!(window.google && window.google.maps && window.google.maps.places && window.google.maps.places.Place);
+
+  function loadMapsApi() {
+    return new Promise((resolve, reject) => {
+      if (mapsLoaded) return resolve();
+      if (mapsLoading) {
+        const t = setInterval(() => {
+          if (window.google && window.google.maps && window.google.maps.places && window.google.maps.places.Place) {
+            clearInterval(t);
+            mapsLoaded = true;
+            resolve();
+          }
+        }, 100);
+        return;
+      }
+      mapsLoading = true;
+      const cb = '__gmapsReviewsCb_' + Math.random().toString(36).slice(2);
+      window[cb] = () => { mapsLoaded = true; resolve(); delete window[cb]; };
+      const s = document.createElement('script');
+      s.async = true;
+      s.defer = true;
+      // loading=async — doporučovaný režim, eliminuje warning
+      s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(API_KEY) +
+              '&libraries=places&loading=async&callback=' + cb + '&v=weekly&language=cs';
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  // Nová Places API (Place class) — povinná pro účty po 1. 3. 2025.
+  async function fetchPlaceDetails() {
+    const Place = window.google.maps.places.Place;
+    if (!Place) throw new Error('Places API (Place class) is not available');
+    const place = new Place({ id: PLACE_ID, requestedLanguage: 'cs' });
+    await place.fetchFields({
+      fields: ['rating', 'userRatingCount', 'reviews'],
+    });
+    return place;
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function renderRating(place) {
+    if (!ratingBox || !place.rating) return;
+    const pct = Math.max(0, Math.min(100, (place.rating / 5) * 100));
+    ratingValue.textContent = place.rating.toFixed(1).replace('.', ',');
+    ratingCount.textContent = (place.userRatingCount || 0) + ' recenzí na Google';
+    // Drobné zpoždění pro plynulejší fill animaci po vykreslení
+    requestAnimationFrame(() => { starsFill.style.width = pct + '%'; });
+    ratingBox.hidden = false;
+  }
+
+  function renderReviews(reviews) {
+    if (!reviews || !reviews.length) {
+      list.innerHTML = '<li class="review review--placeholder"><p class="review__quote">Zatím žádné recenze. Buďte první!</p></li>';
+      return;
+    }
+    const html = reviews.slice(0, MAX_REVIEWS).map((r, i) => {
+      // Nová Places API: r.authorAttribution.displayName / .photoURI
+      const author = (r.authorAttribution && r.authorAttribution.displayName) || '';
+      const photo = (r.authorAttribution && r.authorAttribution.photoURI) || '';
+      const text = r.text || '';
+      const rating = r.rating || 0;
+      const dateText = r.relativePublishTimeDescription || '';
+      const initials = (author || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+      const avatar = photo
+        ? `<span class="review__avatar" style="background-image:url('${escapeHtml(photo)}')"></span>`
+        : `<span class="review__avatar">${escapeHtml(initials)}</span>`;
+      const stars = '★'.repeat(rating) + '☆'.repeat(Math.max(0, 5 - rating));
+      return `
+        <li class="review" style="animation-delay:${i * 80}ms">
+          <div class="review__top">
+            ${avatar}
+            <div class="review__author-block">
+              <span class="review__author">${escapeHtml(author)}</span>
+              <span class="review__date">${escapeHtml(dateText)}</span>
+            </div>
+            <span class="review__rating" aria-label="${rating} z 5">${stars}</span>
+          </div>
+          <p class="review__quote">${escapeHtml(text)}</p>
+        </li>`;
+    }).join('');
+    list.innerHTML = html;
+  }
+
+  let started = false;
+  function start() {
+    if (started) return;
+    started = true;
+    loadMapsApi()
+      .then(fetchPlaceDetails)
+      .then(place => {
+        renderRating(place);
+        renderReviews(place.reviews);
+      })
+      .catch(err => {
+        console.warn('[Google Reviews]', err);
+        list.innerHTML = '<li class="review review--placeholder"><p class="review__quote">Recenze se nepodařilo načíst. Podívejte se na <a href="' + (allLink ? allLink.href : '#') + '" target="_blank" rel="noopener">Google profil</a>.</p></li>';
+      });
+  }
+
+  // Lazy-load: načti až když se reviews dostanou do viewportu
+  const reviewsEl = list.closest('.reviews');
+  if ('IntersectionObserver' in window && reviewsEl) {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) { start(); io.disconnect(); break; }
+      }
+    }, { rootMargin: '200px' });
+    io.observe(reviewsEl);
+  } else {
+    start();
+  }
+})();
+
+/* ===== REVIEW MODÁL =====
+   Modál se třemi kroky: choose (Google vs. napřímo) → form (Formspree) → thanks.
+   Na webu se psaná recenze posílá e-mailem (Google neumožňuje API zápis recenzí).
+   Po submitu nabízí CTA i k Google profilu pro veřejnou recenzi. */
+(function initReviewModal() {
+  const modal = document.getElementById('reviewModal');
+  const openBtn = document.getElementById('reviewsWriteBtn');
+  if (!modal || !openBtn) return;
+
+  const steps = modal.querySelectorAll('[data-step]');
+  const closeEls = modal.querySelectorAll('[data-rev-close]');
+  const googleOpt = document.getElementById('reviewModalGoogle');
+  const directOpt = document.getElementById('reviewModalDirect');
+  const backBtn = document.getElementById('reviewModalBack');
+  const form = document.getElementById('reviewForm');
+  const stars = document.getElementById('revFormStars');
+  const ratingInput = document.getElementById('revFormRating');
+  const submitBtn = form.querySelector('.rev-form__submit');
+  const submitLabel = form.querySelector('.rev-form__submit-label');
+  const thanksGoogle = document.getElementById('reviewThanksGoogle');
+
+  function showStep(name) {
+    steps.forEach(s => { s.hidden = (s.dataset.step !== name); });
+  }
+
+  function googleWriteUrl() {
+    const id = window.__dilnaPlaceId;
+    return id
+      ? 'https://search.google.com/local/writereview?placeid=' + encodeURIComponent(id)
+      : 'https://maps.app.goo.gl/gTKptpRTpkgJQnJR6';
+  }
+
+  function open() {
+    modal.hidden = false;
+    showStep('choose');
+    if (googleOpt) googleOpt.href = googleWriteUrl();
+    if (thanksGoogle) thanksGoogle.href = googleWriteUrl();
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => {
+      const focusEl = modal.querySelector('.rev-modal__close');
+      if (focusEl) focusEl.focus();
+    }, 50);
+  }
+  function close() {
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    // Reset formuláře pro příští otevření
+    setTimeout(() => {
+      try { form.reset(); } catch (_) {}
+      ratingInput.value = '';
+      stars.querySelectorAll('.rev-form__star').forEach(s => {
+        s.classList.remove('is-active');
+        s.setAttribute('aria-checked', 'false');
+      });
+      submitBtn.classList.remove('is-loading');
+      submitBtn.disabled = false;
+      submitLabel.textContent = 'Odeslat recenzi';
+    }, 200);
+  }
+
+  openBtn.addEventListener('click', open);
+  closeEls.forEach(el => el.addEventListener('click', close));
+  document.addEventListener('keydown', (e) => {
+    if (!modal.hidden && e.key === 'Escape') close();
+  });
+
+  if (directOpt) directOpt.addEventListener('click', () => showStep('form'));
+  if (backBtn) backBtn.addEventListener('click', () => showStep('choose'));
+
+  // Hvězdičky — klik nastaví hodnotu, hover ukazuje preview
+  if (stars && ratingInput) {
+    const starEls = Array.from(stars.querySelectorAll('.rev-form__star'));
+    function paint(activeIdx, hoverIdx) {
+      starEls.forEach((el, i) => {
+        el.classList.toggle('is-active', i < activeIdx);
+        el.classList.toggle('is-hover', hoverIdx >= 0 && i <= hoverIdx && i >= activeIdx);
+      });
+    }
+    starEls.forEach((el, i) => {
+      el.addEventListener('click', () => {
+        ratingInput.value = String(i + 1);
+        starEls.forEach(s => s.setAttribute('aria-checked', 'false'));
+        el.setAttribute('aria-checked', 'true');
+        paint(i + 1, -1);
+      });
+      el.addEventListener('mouseenter', () => paint(parseInt(ratingInput.value || '0', 10), i));
+      el.addEventListener('focus', () => paint(parseInt(ratingInput.value || '0', 10), i));
+    });
+    stars.addEventListener('mouseleave', () => paint(parseInt(ratingInput.value || '0', 10), -1));
+  }
+
+  // Submit — fetch na Formspree, čekáme JSON odpověď
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!ratingInput.value) {
+        alert('Vyberte prosím počet hvězdiček.');
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.classList.add('is-loading');
+      submitLabel.textContent = 'Odesílám…';
+      try {
+        const res = await fetch(form.action, {
+          method: 'POST',
+          headers: { 'Accept': 'application/json' },
+          body: new FormData(form),
+        });
+        if (res.ok) {
+          showStep('thanks');
+        } else {
+          throw new Error('Formspree HTTP ' + res.status);
+        }
+      } catch (err) {
+        console.warn('[Review submit]', err);
+        alert('Odeslání se nepodařilo. Zkuste to prosím znovu, nebo nám napište na info@studiodilna.cz.');
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('is-loading');
+        submitLabel.textContent = 'Odeslat recenzi';
+      }
+    });
+  }
+})();
+
+/* ===== HERO GRID =====
+   Statický jemný grid v pozadí hero sekce + vrstva odhalená pod kurzorem
+   přes mask-image radial-gradient (CSS proměnné --mx/--my). Bez animace. */
+(function initHeroGrid() {
+  const grid = document.getElementById('heroGrid');
+  if (!grid) return;
+  const hero = grid.parentElement;
+
+  hero.addEventListener('pointermove', (e) => {
+    const r = grid.getBoundingClientRect();
+    grid.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+    grid.style.setProperty('--my', (e.clientY - r.top) + 'px');
+  }, { passive: true });
+
+  hero.addEventListener('pointerleave', () => {
+    grid.style.setProperty('--mx', '-400px');
+    grid.style.setProperty('--my', '-400px');
+  });
+})();

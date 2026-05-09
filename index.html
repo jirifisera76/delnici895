@@ -20,7 +20,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
   <!-- Leaflet a Pannellum CSS/JS se NACHÁZEJÍ LAZY z script.js až když user
        doroluje k mapě/360, ne na initial page load (300 KB šetříme). -->
-  <link rel="stylesheet" href="styles.css?v=124" />
+  <link rel="stylesheet" href="styles.css?v=133" />
 
   <meta property="og:title" content="Dílna — Industriální kreativní studio v Holešovicích" />
   <meta property="og:description" content="150 m² industriálního kreativního studia v Praze-Holešovicích pro natáčení, focení a produkci." />
@@ -87,6 +87,12 @@
 
   <!-- ===== HERO ===== -->
   <section class="hero">
+    <!-- Nekonečný grid v pozadí + vrstva odhalená pod kurzorem -->
+    <div class="hero__grid" id="heroGrid" aria-hidden="true">
+      <div class="hero__grid-layer" id="heroGridBase"></div>
+      <div class="hero__grid-layer hero__grid-layer--reveal" id="heroGridReveal"></div>
+    </div>
+
     <!-- Parallax floating images — sledují kurzor s lerp easingem -->
     <div class="floating" id="floating" aria-hidden="true">
       <div class="float-img float-img--1" data-depth="0.5">
@@ -571,12 +577,57 @@
     </form>
   </section>
 
-  <!-- ===== MAPA ===== -->
-  <section class="map" aria-label="Poloha studia Dílna na mapě">
-    <div class="map__canvas" id="mapCanvas"></div>
-    <a class="map__cta" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener">
-      Otevřít v Google Maps
-    </a>
+  <!-- ===== MAPA + RECENZE ===== -->
+  <section class="map-row" aria-label="Poloha a recenze">
+    <div class="map" aria-label="Poloha studia Dílna na mapě">
+      <div class="map__canvas" id="mapCanvas"></div>
+      <a class="map__cta" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener">
+        Otevřít v Google Maps
+      </a>
+    </div>
+
+    <aside class="reviews" aria-label="Recenze klientů z Google">
+      <header class="reviews__head">
+        <span class="reviews__eyebrow">
+          <svg class="reviews__google-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/>
+          </svg>
+          <span>Google recenze</span>
+        </span>
+        <h2 class="reviews__title">Co o studiu<br />říkají klienti</h2>
+      </header>
+
+      <!-- Souhrnné hodnocení — naplní se z Google Places API -->
+      <div class="reviews__rating-big" id="googleRatingSummary" hidden>
+        <div class="reviews__rating-num" id="googleRatingValue">—</div>
+        <div class="reviews__rating-meta">
+          <span class="reviews__stars" aria-hidden="true">
+            <span class="reviews__stars-fill" id="googleStarsFill"></span>
+          </span>
+          <span class="reviews__rating-count" id="googleRatingCount">— recenzí na Google</span>
+        </div>
+      </div>
+
+      <!-- Recenze: naplní script.js z Google Places -->
+      <ul class="reviews__list" id="googleReviewsList">
+        <li class="review review--placeholder">
+          <p class="review__quote">Načítáme recenze z Google…</p>
+        </li>
+      </ul>
+
+      <footer class="reviews__cta">
+        <button type="button" class="reviews__write" id="reviewsWriteBtn">
+          <span class="reviews__write-icon" aria-hidden="true">✦</span>
+          <span>Napsat recenzi</span>
+        </button>
+        <a class="reviews__all" id="reviewsAllLink" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener">
+          Zobrazit všechny →
+        </a>
+      </footer>
+    </aside>
   </section>
 
   <!-- ===== FOOTER ===== -->
@@ -696,6 +747,125 @@
       </div>
     </div>
   </div>
-  <script src="script.js?v=125" defer></script>
+  <!-- ===== MODÁL — NAPSAT RECENZI ===== -->
+  <div class="rev-modal" id="reviewModal" hidden aria-modal="true" role="dialog" aria-labelledby="reviewModalTitle">
+    <div class="rev-modal__backdrop" data-rev-close></div>
+    <div class="rev-modal__card">
+      <button type="button" class="rev-modal__close" id="reviewModalClose" aria-label="Zavřít" data-rev-close>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M6 6 L18 18 M18 6 L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
+
+      <!-- KROK 1 — VOLBA -->
+      <div class="rev-modal__step" data-step="choose">
+        <h3 class="rev-modal__title" id="reviewModalTitle">Sdílejte svou zkušenost</h3>
+        <p class="rev-modal__lead">Vyberte si, kam zpětnou vazbu nasměrujete.</p>
+
+        <div class="rev-modal__options">
+          <a class="rev-option rev-option--google" id="reviewModalGoogle" target="_blank" rel="noopener">
+            <span class="rev-option__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/>
+              </svg>
+            </span>
+            <span class="rev-option__body">
+              <span class="rev-option__title">Recenze na Google</span>
+              <span class="rev-option__desc">Zobrazí se veřejně na Google profilu studia. Pomůže s viditelností ve vyhledávání.</span>
+            </span>
+            <span class="rev-option__arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <button type="button" class="rev-option rev-option--direct" id="reviewModalDirect">
+            <span class="rev-option__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 21l3.5-1L20 6.5 17.5 4 4 17.5 3 21z"/>
+                <path d="M14 7l3 3"/>
+              </svg>
+            </span>
+            <span class="rev-option__body">
+              <span class="rev-option__title">Napsat napřímo studiu</span>
+              <span class="rev-option__desc">Zpětná vazba dorazí e-mailem. S vaším svolením ji zveřejníme na webu.</span>
+            </span>
+            <span class="rev-option__arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KROK 2 — FORMULÁŘ -->
+      <div class="rev-modal__step" data-step="form" hidden>
+        <button type="button" class="rev-modal__back" id="reviewModalBack" aria-label="Zpět">← Zpět</button>
+        <h3 class="rev-modal__title">Napište nám</h3>
+
+        <form class="rev-form" id="reviewForm" action="https://formspree.io/f/mlgzwljw" method="POST" novalidate>
+          <input type="hidden" name="_subject" value="Nová recenze ze studiodilna.cz" />
+          <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" style="display:none" />
+
+          <fieldset class="rev-form__group rev-form__stars-group">
+            <legend>Vaše hodnocení</legend>
+            <div class="rev-form__stars" id="revFormStars" role="radiogroup" aria-label="Hodnocení 1 až 5 hvězdiček">
+              <button type="button" class="rev-form__star" data-val="1" role="radio" aria-checked="false" aria-label="1 hvězdička">★</button>
+              <button type="button" class="rev-form__star" data-val="2" role="radio" aria-checked="false" aria-label="2 hvězdičky">★</button>
+              <button type="button" class="rev-form__star" data-val="3" role="radio" aria-checked="false" aria-label="3 hvězdičky">★</button>
+              <button type="button" class="rev-form__star" data-val="4" role="radio" aria-checked="false" aria-label="4 hvězdičky">★</button>
+              <button type="button" class="rev-form__star" data-val="5" role="radio" aria-checked="false" aria-label="5 hvězdiček">★</button>
+            </div>
+            <input type="hidden" name="rating" id="revFormRating" value="" required />
+          </fieldset>
+
+          <label class="rev-form__group">
+            <span class="rev-form__label">Jméno</span>
+            <input type="text" name="reviewer_name" required placeholder="Jak vás máme uvést" />
+          </label>
+
+          <label class="rev-form__group">
+            <span class="rev-form__label">E-mail <span class="rev-form__hint">(nezveřejníme)</span></span>
+            <input type="email" name="reviewer_email" required placeholder="vas@email.cz" />
+          </label>
+
+          <label class="rev-form__group">
+            <span class="rev-form__label">Vaše zkušenost</span>
+            <textarea name="reviewer_text" required rows="4" placeholder="Co se vám u nás líbilo, co ne, co byste doporučili dál…"></textarea>
+          </label>
+
+          <label class="rev-form__check">
+            <input type="checkbox" name="consent_publish" value="ano" />
+            <span>Souhlasím se zveřejněním na webu studiodilna.cz pod jménem výše.</span>
+          </label>
+
+          <button type="submit" class="rev-form__submit">
+            <span class="rev-form__submit-label">Odeslat recenzi</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- KROK 3 — DĚKUJEME -->
+      <div class="rev-modal__step" data-step="thanks" hidden>
+        <div class="rev-thanks">
+          <svg class="rev-thanks__icon" viewBox="0 0 64 64" aria-hidden="true">
+            <circle class="rev-thanks__circle" cx="32" cy="32" r="28" />
+            <path class="rev-thanks__check" d="M19 33 L28 42 L46 22" />
+          </svg>
+          <h3 class="rev-modal__title">Děkujeme!</h3>
+          <p class="rev-modal__lead">Vaše recenze dorazila do studia. Vážíme si toho.</p>
+          <p class="rev-thanks__note">Pomohli byste nám i krátkou recenzí na Google? Zabere to minutu a posílí to viditelnost studia ve vyhledávání.</p>
+          <a class="rev-thanks__google" id="reviewThanksGoogle" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/>
+            </svg>
+            <span>Sdílet i na Google</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js?v=133" defer></script>
 </body>
 </html>
