@@ -2230,6 +2230,11 @@ function flashPricingError() {
       window.dilnaTotal.overtime = 0;
       window.dilnaTotal.overtimeDetail = '';
       window.dilnaTotal.overtimeHours = 0;
+      // Vyčisti hidden inputy + UI hodnoty, aby Formspree neviděl staré přesčasové časy
+      if (!enabled) {
+        fromPop.clear();
+        toPop.clear();
+      }
       window.dilnaTotal.render();
       document.dispatchEvent(new CustomEvent('time:change'));
       return;
@@ -2843,7 +2848,7 @@ function initMap() {
       const dateText = r.relativePublishTimeDescription || '';
       const initials = (author || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
       const avatar = photo
-        ? `<span class="review__avatar review__avatar--img"><img src="${escapeHtml(photo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('review__avatar--img');this.parentNode.textContent='${escapeHtml(initials)}';"></span>`
+        ? `<span class="review__avatar review__avatar--img" data-initials="${escapeHtml(initials)}"><img src="${escapeHtml(photo)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`
         : `<span class="review__avatar">${escapeHtml(initials)}</span>`;
       const stars = '★'.repeat(rating) + '☆'.repeat(Math.max(0, 5 - rating));
       return `
@@ -2860,6 +2865,17 @@ function initMap() {
         </li>`;
     }).join('');
     list.innerHTML = html;
+    // Bezpečné připojení error handleru — pokud profilovka selže, fallback na iniciály.
+    // Nevkládáme inline `onerror` (XSS hygiene + CSP friendly).
+    list.querySelectorAll('.review__avatar--img img').forEach((img) => {
+      img.addEventListener('error', () => {
+        const span = img.parentNode;
+        if (!span) return;
+        const initials = span.dataset.initials || '';
+        span.classList.remove('review__avatar--img');
+        span.textContent = initials;
+      }, { once: true });
+    });
   }
 
   let started = false;

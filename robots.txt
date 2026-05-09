@@ -1,0 +1,12 @@
+# Studio Dílna — studiodilna.cz
+# https://www.robotstxt.org/
+
+User-agent: *
+Allow: /
+
+# Nesourodé / interní cesty (kdyby v budoucnu vznikly)
+Disallow: /api/
+Disallow: /admin/
+
+# Sitemap
+Sitemap: https://studiodilna.cz/sitemap.xml

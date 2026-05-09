@@ -3,11 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dílna — Industriální kreativní studio v Holešovicích</title>
-  <meta name="description" content="Industriální kreativní studio 150 m² v Praze-Holešovicích pro natáčení, focení a produkci. K pronájmu na hodiny, půldny a celé dny." />
-  <meta name="robots" content="noindex, nofollow" />
+  <title>Studio Dílna — Industriální kreativní studio v Praze-Holešovicích</title>
+  <meta name="description" content="Pronájem industriálního kreativního studia 150 m² v Praze-Holešovicích pro natáčení, focení, podcasty a workshopy. K dispozici po hodině, na půlden i celý den." />
+  <meta name="keywords" content="pronájem studia Praha, kreativní studio Holešovice, fotostudio, podcastové studio, video produkce, industriální prostor, lokace na natáčení" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="googlebot" content="index, follow" />
+  <meta name="author" content="Studio Dílna" />
   <meta name="theme-color" content="#ffffff" />
+  <link rel="canonical" href="https://studiodilna.cz/" />
   <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+  <link rel="apple-touch-icon" href="assets/logo.svg" />
 
   <!-- Preconnect — TLS handshake hned při startu, šetří ~150 ms na první fetch -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -20,32 +25,95 @@
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
   <!-- Leaflet a Pannellum CSS/JS se NACHÁZEJÍ LAZY z script.js až když user
        doroluje k mapě/360, ne na initial page load (300 KB šetříme). -->
-  <link rel="stylesheet" href="styles.css?v=160" />
+  <link rel="stylesheet" href="styles.css?v=162" />
 
-  <meta property="og:title" content="Dílna — Industriální kreativní studio v Holešovicích" />
-  <meta property="og:description" content="150 m² industriálního kreativního studia v Praze-Holešovicích pro natáčení, focení a produkci." />
+  <!-- Open Graph (Facebook, LinkedIn, WhatsApp) -->
+  <meta property="og:title" content="Studio Dílna — Industriální kreativní studio v Praze-Holešovicích" />
+  <meta property="og:description" content="Pronájem 150 m² industriálního kreativního studia pro natáčení, focení, podcasty a workshopy. K dispozici po hodině, na půlden i celý den." />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://studiodilna.cz" />
+  <meta property="og:url" content="https://studiodilna.cz/" />
   <meta property="og:locale" content="cs_CZ" />
+  <meta property="og:site_name" content="Studio Dílna" />
+  <meta property="og:image" content="https://studiodilna.cz/assets/og-cover.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Industriální kreativní studio v Praze-Holešovicích" />
 
-  <!-- LocalBusiness structured data — pomáhá Google v knowledge panelu -->
+  <!-- Twitter card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Studio Dílna — Industriální kreativní studio v Praze-Holešovicích" />
+  <meta name="twitter:description" content="Pronájem 150 m² industriálního studia pro natáčení, focení, podcasty a workshopy." />
+  <meta name="twitter:image" content="https://studiodilna.cz/assets/og-cover.jpg" />
+
+  <!-- LocalBusiness structured data — pomáhá Google v knowledge panelu, Maps a vyhledávání -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
+    "@id": "https://studiodilna.cz/#business",
     "name": "Studio Dílna",
-    "description": "Industriální kreativní studio 150 m² v Praze-Holešovicích pro natáčení, focení, podcasty a workshopy.",
+    "alternateName": "Dílna",
+    "description": "Industriální kreativní studio 150 m² v Praze-Holešovicích k pronájmu pro natáčení, focení, podcasty, workshopy a další kreativní produkci. K dispozici po hodině, na půlden i celý den.",
+    "image": "https://studiodilna.cz/assets/og-cover.jpg",
+    "logo": "https://studiodilna.cz/assets/logo.svg",
     "address": {
       "@type": "PostalAddress",
       "streetAddress": "Přístavní 1315/7",
       "addressLocality": "Praha 7-Holešovice",
+      "addressRegion": "Praha",
       "postalCode": "170 00",
       "addressCountry": "CZ"
     },
     "geo": { "@type": "GeoCoordinates", "latitude": 50.10422, "longitude": 14.44843 },
     "email": "info@studiodilna.cz",
-    "url": "https://studiodilna.cz",
-    "areaServed": "Praha"
+    "url": "https://studiodilna.cz/",
+    "priceRange": "600 – 16 000 Kč",
+    "openingHoursSpecification": {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+      "opens": "00:00",
+      "closes": "23:59"
+    },
+    "areaServed": [
+      { "@type": "City", "name": "Praha" },
+      { "@type": "Country", "name": "Česká republika" }
+    ],
+    "sameAs": [
+      "https://www.instagram.com/studiodilna/"
+    ],
+    "makesOffer": [
+      {
+        "@type": "Offer",
+        "name": "Hodinový pronájem",
+        "priceCurrency": "CZK",
+        "priceSpecification": { "@type": "UnitPriceSpecification", "price": 600, "priceCurrency": "CZK", "unitText": "hour" }
+      },
+      {
+        "@type": "Offer",
+        "name": "Půldenní pronájem (7 hodin)",
+        "priceCurrency": "CZK",
+        "priceSpecification": { "@type": "UnitPriceSpecification", "price": 3500, "priceCurrency": "CZK" }
+      },
+      {
+        "@type": "Offer",
+        "name": "Celodenní pronájem (14 hodin)",
+        "priceCurrency": "CZK",
+        "priceSpecification": { "@type": "UnitPriceSpecification", "price": 5600, "priceCurrency": "CZK" }
+      }
+    ]
+  }
+  </script>
+
+  <!-- WebSite + SearchAction (pomáhá Google identifikovat značku) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": "https://studiodilna.cz/#website",
+    "url": "https://studiodilna.cz/",
+    "name": "Studio Dílna",
+    "inLanguage": "cs-CZ",
+    "publisher": { "@id": "https://studiodilna.cz/#business" }
   }
   </script>
 </head>
@@ -164,7 +232,7 @@
 
   <!-- ===== O STUDIU ===== -->
   <section class="about" id="o-studiu">
-    <a class="about__index" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener">Přístavní 1315/7, 170 00 Praha 7-Holešovice</a>
+    <a class="about__index" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener noreferrer">Přístavní 1315/7, 170 00 Praha 7-Holešovice</a>
     <h2 class="about__heading">O studiu</h2>
     <div class="about__body">
       <p>Dílna je <strong class="about__hl">industriální kreativní studio</strong> o&nbsp;ploše <strong class="about__hl">150&nbsp;m² v&nbsp;Holešovicích</strong>, vhodné pro <strong class="about__hl">natáčení videí, podcastů, focení, workshopy i&nbsp;menší eventy</strong>. Prostor kombinuje čistý vizuál s&nbsp;industriálním charakterem.</p>
@@ -581,7 +649,7 @@
   <section class="map-row" aria-label="Poloha a recenze">
     <div class="map" aria-label="Poloha studia Dílna na mapě">
       <div class="map__canvas" id="mapCanvas"></div>
-      <a class="map__cta" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener">
+      <a class="map__cta" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener noreferrer">
         Otevřít v Google Maps
       </a>
     </div>
@@ -623,7 +691,7 @@
           <span class="reviews__write-icon" aria-hidden="true">✦</span>
           <span>Napsat recenzi</span>
         </button>
-        <a class="reviews__all" id="reviewsAllLink" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener">
+        <a class="reviews__all" id="reviewsAllLink" href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener noreferrer">
           Zobrazit všechny →
         </a>
       </footer>
@@ -660,7 +728,7 @@
         <span class="foot__label">Kontakt</span>
         <a href="mailto:info@studiodilna.cz">info@studiodilna.cz</a>
         <a href="tel:+420775123456">+420 775 123 456</a>
-        <a href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener">
+        <a href="https://maps.app.goo.gl/gTKptpRTpkgJQnJR6" target="_blank" rel="noopener noreferrer">
           Přístavní 1315/7<br />170 00 Praha 7 — Holešovice
         </a>
       </div>
@@ -763,7 +831,7 @@
         <p class="rev-modal__lead">Vyberte si, kam zpětnou vazbu nasměrujete.</p>
 
         <div class="rev-modal__options">
-          <a class="rev-option rev-option--google" id="reviewModalGoogle" target="_blank" rel="noopener">
+          <a class="rev-option rev-option--google" id="reviewModalGoogle" target="_blank" rel="noopener noreferrer">
             <span class="rev-option__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="28" height="28">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -852,7 +920,7 @@
           <h3 class="rev-modal__title">Děkujeme!</h3>
           <p class="rev-modal__lead">Vaše recenze dorazila do studia. Vážíme si toho.</p>
           <p class="rev-thanks__note">Pomohli byste nám i krátkou recenzí na Google? Zabere to minutu a posílí to viditelnost studia ve vyhledávání.</p>
-          <a class="rev-thanks__google" id="reviewThanksGoogle" target="_blank" rel="noopener">
+          <a class="rev-thanks__google" id="reviewThanksGoogle" target="_blank" rel="noopener noreferrer">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -866,6 +934,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=136" defer></script>
+  <script src="script.js?v=137" defer></script>
 </body>
 </html>
