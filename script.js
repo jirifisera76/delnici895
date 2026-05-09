@@ -2814,7 +2814,7 @@ function initMap() {
       const dateText = r.relativePublishTimeDescription || '';
       const initials = (author || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
       const avatar = photo
-        ? `<span class="review__avatar" style="background-image:url('${escapeHtml(photo)}')"></span>`
+        ? `<span class="review__avatar review__avatar--img"><img src="${escapeHtml(photo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('review__avatar--img');this.parentNode.textContent='${escapeHtml(initials)}';"></span>`
         : `<span class="review__avatar">${escapeHtml(initials)}</span>`;
       const stars = '★'.repeat(rating) + '☆'.repeat(Math.max(0, 5 - rating));
       return `
