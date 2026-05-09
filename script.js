@@ -2538,7 +2538,7 @@ function initMap() {
   if (!el || typeof L === 'undefined') return;
 
   // Studio Dílna — Přístavní 1315/7, Praha 7-Holešovice
-  const COORDS = [50.10266, 14.45046];
+  const COORDS = [50.10422, 14.44843];
 
   const map = L.map(el, {
     center: COORDS,
@@ -2566,3 +2566,147 @@ function initMap() {
   L.marker(COORDS, { icon: pinIcon, keyboard: false, interactive: false }).addTo(map);
 }
 
+
+/* =========================================================
+   CONSENT — GDPR cookie banner + Google Consent Mode v2.
+   Banner se ukáže při první návštěvě. Volba se uloží do localStorage
+   na 12 měsíců. Footer odkaz „GDPR & cookies" otevře banner znovu.
+   ========================================================= */
+(function initConsent() {
+  const STORAGE_KEY = 'dilna-consent-v1';
+  const TTL_MS = 365 * 24 * 60 * 60 * 1000; // 12 měsíců
+  // Vyplň, až budeš mít registrovaný Google Analytics 4 účet:
+  const GA_MEASUREMENT_ID = 'G-91MF3Y991J';
+
+  const root = document.getElementById('consent');
+  const banner = document.getElementById('consentBanner');
+  const modal = document.getElementById('consentModal');
+  const analyticsToggle = document.getElementById('consentAnalytics');
+  const marketingToggle = document.getElementById('consentMarketing');
+  if (!root || !banner || !modal) return;
+
+  // ---- Google Consent Mode v2 default state (vše denied) ----
+  // Skript gtag se nahraje až po souhlasu, ale i tak inicializujeme dataLayer
+  // pro budoucí volání.
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
+  window.gtag('consent', 'default', {
+    'analytics_storage': 'denied',
+    'ad_storage': 'denied',
+    'ad_user_data': 'denied',
+    'ad_personalization': 'denied',
+    'wait_for_update': 500,
+  });
+  window.gtag('js', new Date());
+
+  // ---- Storage ----
+  function loadConsent() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const c = JSON.parse(raw);
+      if (!c.timestamp || Date.now() - c.timestamp > TTL_MS) return null;
+      return c;
+    } catch (_) { return null; }
+  }
+  function saveConsent(c) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(c)); } catch (_) {}
+  }
+
+  // ---- Apply consent → update gtag + load GA pokud potřeba ----
+  let _gaLoaded = false;
+  function loadGA() {
+    if (_gaLoaded) return;
+    if (!GA_MEASUREMENT_ID) return; // ID není nastavené → skript nezatěžovat
+    _gaLoaded = true;
+    const s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(GA_MEASUREMENT_ID);
+    document.head.appendChild(s);
+    window.gtag('config', GA_MEASUREMENT_ID, { anonymize_ip: true });
+  }
+  function applyConsent(c) {
+    window.gtag('consent', 'update', {
+      'analytics_storage': c.analytics ? 'granted' : 'denied',
+      'ad_storage': c.marketing ? 'granted' : 'denied',
+      'ad_user_data': c.marketing ? 'granted' : 'denied',
+      'ad_personalization': c.marketing ? 'granted' : 'denied',
+    });
+    if (c.analytics) loadGA();
+    document.dispatchEvent(new CustomEvent('consent:change', { detail: c }));
+  }
+
+  // ---- UI ----
+  function showRoot() {
+    root.hidden = false;
+    requestAnimationFrame(() => root.classList.add('is-visible'));
+  }
+  function hideRoot() {
+    root.classList.remove('is-visible');
+    setTimeout(() => { root.hidden = true; }, 320);
+  }
+  function showBanner() {
+    banner.hidden = false;
+    modal.hidden = true;
+    showRoot();
+  }
+  function showSettings(prefill) {
+    banner.hidden = true;
+    modal.hidden = false;
+    analyticsToggle.checked = !!(prefill && prefill.analytics);
+    marketingToggle.checked = !!(prefill && prefill.marketing);
+    showRoot();
+  }
+
+  function commit(c) {
+    const consent = {
+      version: 1,
+      timestamp: Date.now(),
+      analytics: !!c.analytics,
+      marketing: !!c.marketing,
+    };
+    saveConsent(consent);
+    applyConsent(consent);
+    hideRoot();
+  }
+
+  // ---- Init: pokud uživatel už rozhodl, jen aplikuj. Jinak ukaž banner. ----
+  const stored = loadConsent();
+  if (stored) {
+    applyConsent(stored);
+  } else {
+    showBanner();
+  }
+
+  // ---- Klikací handlery (delegace) ----
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    if (act === 'accept-all') commit({ analytics: true, marketing: true });
+    else if (act === 'reject') commit({ analytics: false, marketing: false });
+    else if (act === 'settings') showSettings(loadConsent() || {});
+    else if (act === 'save') commit({
+      analytics: analyticsToggle.checked,
+      marketing: marketingToggle.checked,
+    });
+    else if (act === 'close') hideRoot();
+  });
+
+  // ---- Hash trigger: index.html#consent otevře modal s nastavením ----
+  // (Použité odkazem „Změnit nastavení cookies" z gdpr.html.)
+  function maybeOpenFromHash() {
+    if (window.location.hash === '#consent') {
+      showSettings(loadConsent() || {});
+      history.replaceState(null, '', window.location.pathname);
+    }
+  }
+  maybeOpenFromHash();
+  window.addEventListener('hashchange', maybeOpenFromHash);
+
+  // Veřejné API pro budoucí integrace (např. Meta Pixel)
+  window.dilnaConsent = {
+    get: loadConsent,
+    open: () => showSettings(loadConsent() || {}),
+  };
+})();

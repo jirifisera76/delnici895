@@ -20,7 +20,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
   <!-- Leaflet a Pannellum CSS/JS se NACHÁZEJÍ LAZY z script.js až když user
        doroluje k mapě/360, ne na initial page load (300 KB šetříme). -->
-  <link rel="stylesheet" href="styles.css?v=116" />
+  <link rel="stylesheet" href="styles.css?v=124" />
 
   <meta property="og:title" content="Dílna — Industriální kreativní studio v Holešovicích" />
   <meta property="og:description" content="150 m² industriálního kreativního studia v Praze-Holešovicích pro natáčení, focení a produkci." />
@@ -42,7 +42,7 @@
       "postalCode": "170 00",
       "addressCountry": "CZ"
     },
-    "geo": { "@type": "GeoCoordinates", "latitude": 50.10266, "longitude": 14.45046 },
+    "geo": { "@type": "GeoCoordinates", "latitude": 50.10422, "longitude": 14.44843 },
     "email": "info@studiodilna.cz",
     "url": "https://studiodilna.cz",
     "areaServed": "Praha"
@@ -614,21 +614,88 @@
         </a>
       </div>
 
-      <div class="foot__col">
-        <span class="foot__label">Sledujte</span>
-        <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer">Instagram</a>
-        <a href="https://www.facebook.com/" target="_blank" rel="noopener noreferrer">Facebook</a>
-      </div>
     </div>
 
     <div class="foot__bottom">
       <span>© 2026 Studio Dílna</span>
       <span class="foot__legal">IČO: 12345678 · DIČ: CZ12345678</span>
-      <a class="foot__legal" href="#">GDPR &amp; cookies</a>
+      <a class="foot__legal" href="gdpr.html">GDPR &amp; cookies</a>
+      <a class="foot__social" href="https://www.instagram.com/studiodilna/" target="_blank" rel="noopener noreferrer" aria-label="Instagram studio Dílna">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="17.4" cy="6.6" r="1" fill="currentColor"/>
+        </svg>
+      </a>
     </div>
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="script.js?v=116" defer></script>
+
+  <!-- ===== CONSENT — GDPR cookie banner + nastavení (Consent Mode v2) ===== -->
+  <div class="consent" id="consent" hidden role="dialog" aria-label="Souhlas s cookies" aria-modal="false">
+    <div class="consent__banner" id="consentBanner">
+      <span class="consent__dot" aria-hidden="true"></span>
+      <div class="consent__head">
+        <h3 class="consent__title">Cookies a soukromí</h3>
+        <p class="consent__text">K fungování webu používáme nezbytné cookies. Volitelně k tomu přidáme i anonymní statistiku návštěvnosti. <a href="gdpr.html">Více info</a></p>
+      </div>
+      <div class="consent__actions">
+        <button type="button" class="consent__btn consent__btn--ghost" data-act="reject">Odmítnout</button>
+        <button type="button" class="consent__btn consent__btn--ghost" data-act="settings">Nastavení</button>
+        <button type="button" class="consent__btn consent__btn--primary" data-act="accept-all">Přijmout vše</button>
+      </div>
+    </div>
+
+    <div class="consent__modal" id="consentModal" hidden>
+      <div class="consent__modal-card" role="dialog" aria-modal="true" aria-labelledby="consentModalTitle">
+        <button type="button" class="consent__close" data-act="close" aria-label="Zavřít">×</button>
+        <h3 class="consent__title" id="consentModalTitle">Nastavení cookies</h3>
+        <p class="consent__text">Vyberte kategorie, které chcete povolit. Nezbytné cookies jsou nutné pro fungování stránky — bez nich rezervační formulář nebude fungovat.</p>
+
+        <div class="consent__category">
+          <div class="consent__category-head">
+            <span class="consent__category-name">Nezbytné</span>
+            <span class="consent__category-status">Vždy aktivní</span>
+          </div>
+          <p class="consent__category-desc">Cache dostupnosti termínů, stav rezervačního formuláře, ochrana proti spamu (Formspree honeypot).</p>
+        </div>
+
+        <div class="consent__category">
+          <div class="consent__category-head">
+            <span class="consent__category-name">Analytické</span>
+            <label class="consent__toggle">
+              <input type="checkbox" id="consentAnalytics" />
+              <span class="consent__toggle-slider" aria-hidden="true"></span>
+            </label>
+          </div>
+          <p class="consent__category-desc">Anonymní statistiky návštěvnosti přes Google Analytics — kolik lidí stránku navštíví, jak dlouho zůstanou. Pomáhá nám web vylepšovat.</p>
+        </div>
+
+        <div class="consent__category">
+          <div class="consent__category-head">
+            <span class="consent__category-name">Marketingové</span>
+            <label class="consent__toggle">
+              <input type="checkbox" id="consentMarketing" />
+              <span class="consent__toggle-slider" aria-hidden="true"></span>
+            </label>
+          </div>
+          <p class="consent__category-desc">Měření efektivity reklamních kampaní (Google Ads, Meta) a personalizace obsahu na sociálních sítích.</p>
+        </div>
+
+        <div class="consent__actions">
+          <button type="button" class="consent__btn consent__btn--ghost" data-act="reject">Odmítnout vše</button>
+          <button type="button" class="consent__btn consent__btn--primary" data-act="save">Uložit volbu</button>
+        </div>
+
+        <p class="consent__legal">
+          Správce údajů: <strong>Studio Dílna</strong>, Přístavní 1315/7, 170 00 Praha 7. Kontakt:
+          <a href="mailto:info@studiodilna.cz">info@studiodilna.cz</a>.
+          Souhlas platí 12 měsíců. Detaily najdete v <a href="gdpr.html">zásadách zpracování</a>.
+        </p>
+      </div>
+    </div>
+  </div>
+  <script src="script.js?v=125" defer></script>
 </body>
 </html>
