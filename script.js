@@ -1719,8 +1719,8 @@ function initTour() {
       const hint = document.createElement('p');
       hint.className = 'time-picker__hint';
       hint.textContent = pickStart === null
-        ? 'Klikněte na čas začátku. Min. 1 h, od 2 h prodlužujete po půl hodině.'
-        : `Začátek ${slotToTime(pickStart)}. Klikněte na čas konce — dalšími kliky můžete prodlužovat.`;
+        ? 'Vyberte čas začátku (min. 1 h).'
+        : `Začátek ${slotToTime(pickStart)}. Vyberte čas konce.`;
       root.appendChild(hint);
     }
   }
@@ -1853,7 +1853,7 @@ function initTour() {
       hideTotal();
       const hint = document.createElement('p');
       hint.className = 'time-picker__hint';
-      hint.textContent = 'Vyberte Ráno (8–12), Odpoledne (13–17) nebo Večer (18–22) — 4 h.';
+      hint.textContent = 'Vyberte 4hodinový blok:';
       root.appendChild(hint);
     }
   }
@@ -1904,7 +1904,7 @@ function initTour() {
       hideTotal();
       const hint = document.createElement('p');
       hint.className = 'time-picker__hint';
-      hint.textContent = 'Vyberte Dopoledne (8–15) nebo Odpoledne (15–22) — 7 h.';
+      hint.textContent = 'Vyberte 7hodinový blok:';
       root.appendChild(hint);
     }
   }
@@ -2088,6 +2088,7 @@ function flashPricingError() {
       opt.textContent = v;
       opt.addEventListener('click', () => {
         if (opt.classList.contains('time-pop__opt--busy')) return; // sandwich = unselectable
+        if (opt.classList.contains('time-pop__opt--locked')) return; // dříve než Od → unselectable
         select(v); close();
       });
       menuEl.appendChild(opt);
@@ -2144,8 +2145,36 @@ function flashPricingError() {
     return { select, clear, applyBusy };
   }
 
-  const fromPop = setupTimePop({ btn: fromBtn, valueEl: fromValueEl, menuEl: fromMenu, hiddenInput: fromInput, onChange: () => recompute() });
+  const fromPop = setupTimePop({ btn: fromBtn, valueEl: fromValueEl, menuEl: fromMenu, hiddenInput: fromInput, onChange: () => { syncToConstraint(); recompute(); } });
   const toPop = setupTimePop({ btn: toBtn, valueEl: toValueEl, menuEl: toMenu, hiddenInput: toInput, onChange: () => recompute() });
+
+  /* Convert overtime "HH:MM" → minuty od 22:00 (lineární osa přes půlnoc).
+     22:00 → 0, 23:00 → 60, 00:00 → 120, 01:00 → 180, …, 08:00 → 600. */
+  function overtimeMin(str) {
+    if (!str) return -1;
+    const parts = str.split(':');
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1] || '0', 10);
+    if (isNaN(h) || isNaN(m)) return -1;
+    if (h >= 22) return (h - 22) * 60 + m;       // 22:00 - 23:30
+    if (h <= 8)  return (h + 2)  * 60 + m;       // 00:00 - 08:00
+    return -1;
+  }
+
+  /* Po změně Od: zamkni v Do dropdownu všechny časy ≤ Od. Pokud je aktuální Do
+     nyní neplatné (≤ Od), zruš ho — uživatel si musí vybrat nový. */
+  function syncToConstraint() {
+    const fromMin = overtimeMin(fromInput.value);
+    const toOpts = toMenu.querySelectorAll('.time-pop__opt');
+    toOpts.forEach((opt) => {
+      const optMin = overtimeMin(opt.dataset.value);
+      const lock = fromMin >= 0 && optMin <= fromMin;
+      opt.classList.toggle('time-pop__opt--locked', lock);
+    });
+    if (toInput.value && fromMin >= 0 && overtimeMin(toInput.value) <= fromMin) {
+      toPop.clear();
+    }
+  }
 
   // Hodinové sazby per prostor — drží se shodně s time pickerem
   const HOURLY_RATES = {

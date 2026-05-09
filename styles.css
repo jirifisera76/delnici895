@@ -2251,6 +2251,17 @@ button { font: inherit; cursor: pointer; }
 .time-pop__opt--partial {
   color: rgba(255, 200, 200, 0.55);
 }
+/* Locked: časy ≤ Od (Do nemůže být dřív/stejně) — nelze vybrat */
+.time-pop__opt--locked {
+  color: rgba(255, 255, 255, 0.18);
+  text-decoration: line-through;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+.time-pop__opt--locked:hover {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.18);
+}
 .time-pop__opt.is-selected {
   background: var(--rust);
   color: var(--paper);
@@ -4103,39 +4114,201 @@ button { font: inherit; cursor: pointer; }
    MOBILNÍ OPTIMALIZACE — ≤480px (běžné telefony) a ≤375px (iPhone SE class)
    Adresuje: čitelnost ceníku, touch targety, modaly, footer.
    ========================================================= */
-@media (max-width: 480px) {
-  /* Pricing table — větší fonty, lepší padding */
-  .pricing__table thead th {
-    font-size: 0.7rem;
-    letter-spacing: 0.06em;
-    padding: 0.9rem 0.45rem 0.7rem;
+/* ===== Pricing tabulka → karty na mobilu (≤640px) =====
+   Přepneme tabulku na stack: každý tier je samostatná karta s nadpisem
+   a třemi řádky (Studio / Podcastová / Celé studio), místo sloupců.
+   Klikatelnost cen zůstává — .price-cell je dál tlačítko. */
+@media (max-width: 640px) {
+  .pricing__table-wrap { overflow: visible; }
+  .pricing__table { border: none; border-collapse: separate; }
+
+  /* Hide table head — labely se přesunou před každou cenu jako prefix */
+  .pricing__table thead { display: none; }
+
+  .pricing__table,
+  .pricing__table tbody { display: block; width: 100%; }
+  .pricing__table tr {
+    display: block;
+    background: var(--paper);
+    border: 1px solid rgba(10, 10, 10, 0.1);
+    margin: 0 0 0.9rem;
+    padding: 1.1rem 1.1rem 0.6rem;
+    position: relative;
   }
+  /* Featured (Mini blok) — zelený rámeček, ne rust */
+  .pricing__table .tier-row--featured {
+    border: 2px solid #1f9d55;
+    background: rgba(31, 157, 85, 0.04);
+  }
+  /* Override desktopových border/bg pravidel pro buňky featured řádku — na
+     mobilu by jinak každá buňka kreslila vlastní zelené 2px linky uvnitř karty. */
+  .pricing__table tbody .tier-row--featured th,
+  .pricing__table tbody .tier-row--featured td {
+    border-top: none;
+    background: transparent;
+  }
+  .pricing__table tbody .tier-row--featured th { border-left: none; }
+  .pricing__table tbody .tier-row--featured td:last-child { border-right: none; }
+  /* Selected cena ve featured řádku — jen barva textu, ne celozelený fill */
+  .pricing__table tbody .tier-row--featured .price-cell.is-selected,
+  .pricing__table tbody .tier-row--featured .price-cell.is-selected:hover {
+    background: transparent;
+    color: #1f9d55;
+    font-weight: 500;
+  }
+  /* Hover na ceně v Mini bloku → jemné ztmavení zeleného podkladu (analog. k rust hoveru) */
+  .pricing__table tbody .tier-row--featured .price-cell:hover {
+    background: rgba(31, 157, 85, 0.1);
+    color: #1f9d55;
+  }
+  /* Vnitřní oddělovače uvnitř Mini bloku — jemné zelené hairlines místo šedých
+     (lépe ladí s rámečkem a nejsou tak výrazné jako default šedé) */
+  .pricing__table tbody .tier-row--featured th {
+    border-bottom: 1px solid rgba(31, 157, 85, 0.18);
+  }
+  .pricing__table tbody .tier-row--featured td {
+    border-bottom: 1px solid rgba(31, 157, 85, 0.12);
+  }
+  .pricing__table tbody .tier-row--featured td:last-of-type {
+    border-bottom: none;
+  }
+  /* Obnovit vnitřní separátory v poslední kartě (Celodenní) — desktop rule
+     tr:last-child ruší border-bottom, ale na mobilu chceme oddělovače uvnitř. */
+  .pricing__table tbody tr:last-child th {
+    border-bottom: 1px solid rgba(10, 10, 10, 0.08);
+  }
+  .pricing__table tbody tr:last-child td {
+    border-bottom: 1px solid rgba(10, 10, 10, 0.06);
+  }
+  .pricing__table tbody tr:last-child td:last-of-type {
+    border-bottom: none;
+  }
+
+  /* Tier header (titulek karty): "Název  ··· [-X%]" / pod tím "[doba] perioda" */
   .pricing__table tbody th {
-    font-size: 0.95rem;
-    padding: 1.05rem 0.45rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 0.6rem;
+    text-align: left;
+    padding: 0 0 0.85rem;
+    border-bottom: 1px solid rgba(10, 10, 10, 0.08);
+    margin-bottom: 0.7rem;
+    font-family: var(--display);
+    font-size: 1.05rem;
+    color: var(--ink);
+    letter-spacing: 0.01em;
+    white-space: normal;
+    line-height: 1.2;
+  }
+  /* Sleva-bublinka — vpravo nahoře v titulku */
+  .pricing__table tbody th .row-badge,
+  .pricing__table tbody th .row-badge--sm {
+    order: 2;
+    margin: 0 0 0 auto;       /* push doprava */
+    font-size: 0.64rem !important;
+    padding: 0.22rem 0.5rem;
+    letter-spacing: 0.06em;
+    align-self: center;
+  }
+  /* Druhý řádek titulku — duration tag + perioda */
+  .pricing__table tbody th .tier-meta {
+    order: 3;
+    flex-basis: 100%;          /* vynutí nový řádek pod nadpisem */
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    margin-top: 0.15rem;
+  }
+  .pricing__table tbody th .duration-tag {
+    font-size: 0.7rem;
+    padding: 0.24rem 0.6rem;
+    letter-spacing: 0.06em;
   }
   .pricing__table tbody th small {
-    font-size: 0.68rem;
-    margin-top: 0.25rem;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    line-height: 1.35;
+    margin: 0;
+    font-family: var(--sans);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
   }
+  /* <br> v small textu skryjeme — chceme inline „Ráno · Odpoledne · Večer" */
+  .pricing__table tbody th small br { display: none; }
+  .pricing__table tbody th small::after { content: ""; }
+
+  /* Cenové řádky — flex: label vlevo, cena vpravo s tabular-nums */
   .pricing__table td {
-    font-size: 0.85rem;
-    padding: 1rem 0.4rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.8rem 0;
+    border-bottom: 1px solid rgba(10, 10, 10, 0.06);
+    font-size: 0.98rem;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1.3;
+    min-height: 44px;
+    box-sizing: border-box;
   }
-  /* Discount badges — čitelnější mini-bublina */
-  .row-badge,
-  .row-badge--sm {
-    font-size: 0.6rem !important;
-    letter-spacing: 0.06em;
-    padding: 0.18rem 0.4rem;
+  .pricing__table tr td:last-of-type { border-bottom: none; padding-bottom: 0.4rem; }
+  .pricing__table td::before {
+    content: attr(data-space-label);
+    font-family: var(--sans);
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: var(--ink-soft);
+    letter-spacing: 0.02em;
+    text-transform: none;
+    text-align: left;
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.3;
   }
-  .row-badge .row-badge__label {
-    font-size: 0.55rem !important;
+  .pricing__table td:nth-of-type(1)::before { content: "Studio"; }
+  .pricing__table td:nth-of-type(2)::before { content: "Podcastová / konferenční"; }
+  .pricing__table td:nth-of-type(3)::before { content: "Celé studio"; }
+
+  /* Cena vpravo — display font + tabular numerals (čísla pod sebou lícují) */
+  .pricing__table td.price-cell {
+    font-family: var(--display);
+    color: var(--ink);
+    font-weight: 400;
+    cursor: pointer;
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.15s ease;
   }
-  .duration-tag {
-    font-size: 0.7rem;
-    padding: 0.22rem 0.5rem;
+  .pricing__table td.price-cell:hover {
+    color: var(--rust);
   }
+  .pricing__table td.price-cell.is-selected {
+    color: var(--rust);
+    font-weight: 500;
+  }
+  /* Featured (zelený) selected stav */
+  .pricing__table .tier-row--featured td.price-cell:hover {
+    color: #1f9d55;
+  }
+  .pricing__table .tier-row--featured td.price-cell.is-selected {
+    color: #1f9d55;
+  }
+
+  .pricing__note {
+    margin-top: 1.2rem;
+    font-size: 0.78rem;
+    text-align: left;
+    line-height: 1.45;
+  }
+}
+
+@media (max-width: 480px) {
 
   /* Time slots — touch-friendly velikost */
   .time-slot {
@@ -4218,12 +4391,84 @@ button { font: inherit; cursor: pointer; }
   .foot__nav a, .foot__contact a { min-height: 38px; display: inline-flex; align-items: center; }
   .foot__legal { font-size: 0.72rem; }
 
-  /* Reviews — kompaktnější CTA na mobilu (jsou v statickém flow) */
-  .reviews { padding: 1.5rem 1.2rem; }
-  .reviews__rating-big { padding: 0.7rem 0.9rem; gap: 0.8rem; }
-  .reviews__title { font-size: 1.4rem; }
-  .reviews__write { padding: 0.7rem 1.1rem; font-size: 0.78rem; min-height: 42px; }
-  .reviews__all { font-size: 0.7rem; }
+  /* Reviews — kompaktnější, čistší layout pro mobil */
+  .reviews { padding: 1.8rem 1.3rem 1.6rem; gap: 1.1rem; }
+  .reviews__title { font-size: 1.45rem; line-height: 1.1; }
+  .reviews__eyebrow { font-size: 0.66rem; letter-spacing: 0.14em; }
+
+  /* Velký rating box — na mobilu kompaktní s číslem vlevo, hvězdami + počtem vpravo */
+  .reviews__rating-big {
+    padding: 0.85rem 1rem;
+    gap: 0.85rem;
+  }
+  .reviews__rating-num { font-size: 2rem; }
+  .reviews__rating-meta { gap: 0.25rem; }
+  .reviews__stars { font-size: 0.9rem; width: 5.8em; }
+  .reviews__rating-count { font-size: 0.72rem; }
+
+  /* Recenzní karty — vzdušnější, info ve dvou řádcích bez mačkání */
+  .review {
+    padding: 1rem 1.1rem 1.05rem;
+    gap: 0.7rem;
+  }
+  .review__top {
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .review__avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 0.78rem;
+  }
+  .review__author-block {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 0.1rem;
+  }
+  .review__author {
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .review__date { font-size: 0.7rem; }
+  .review__rating {
+    font-size: 0.85rem;
+    flex: 0 0 auto;
+  }
+  .review__quote {
+    font-size: 0.92rem;
+    line-height: 1.55;
+    padding-left: 0.75rem;
+    border-left-width: 2px;
+  }
+
+  /* CTA řádek pod kartami — full-width tlačítko + zarovnaný link */
+  .reviews__cta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding-top: 0.9rem;
+  }
+  .reviews__write {
+    padding: 0.8rem 1.2rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    min-height: 44px;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .reviews__all {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-align: center;
+    width: 100%;
+    order: 2;
+    padding: 0.4rem 0;
+  }
 
   /* Map CTA — touch friendly */
   .map__cta { padding: 0.7rem 1.1rem; font-size: 0.78rem; min-height: 42px; }
@@ -4260,4 +4505,203 @@ button { font: inherit; cursor: pointer; }
   .review:hover { transform: none; box-shadow: none; }
   .price-cell:hover { transform: none; }
   .float-img > img:hover { transform: none; filter: grayscale(8%) contrast(1.02); }
+}
+
+/* =========================================================
+   BOOKING FORM — mobilní layout (≤768px)
+   Kalendář edge-to-edge, formulář s lepším rytmem a separací.
+   ========================================================= */
+@media (max-width: 768px) {
+  /* Sekce má menší dolní rezervu (původně 12rem byla pro patu desktopu) */
+  .booking {
+    padding: 1.6rem var(--pad-x) 5rem;
+  }
+  .booking__head {
+    margin-bottom: 2rem;
+    gap: 1rem;
+  }
+
+  /* Layout sekcí — vyšší vertikální gap pro čitelnost */
+  .booking__layout { gap: 2.4rem !important; }
+
+  /* Kalendář — IDENTICKÁ velikost pro locked i unlocked stav */
+  #calendar.calendar,
+  #calendar.calendar.is-locked {
+    width: 100%;
+    max-width: 380px;
+    margin: 0 auto;
+    padding: 1rem 0.9rem;
+    align-self: center;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  /* Grid fit – min-width 0 zajistí, že 7 sloupců shrinkne pod content size */
+  .calendar__weekdays,
+  .calendar__grid {
+    gap: 3px;
+    width: 100%;
+  }
+  .calendar__weekdays > *,
+  .calendar__grid > * {
+    min-width: 0;
+  }
+  .calendar__day {
+    aspect-ratio: 1;
+    font-size: 0.82rem;
+    padding: 0;
+    overflow: hidden;
+  }
+  .calendar__day-number { line-height: 1; }
+  .calendar__weekdays {
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+  }
+
+  /* Variant chip – vycentrované na střed obrazovky (jako kalendář) */
+  .booking__variant {
+    max-width: 420px;
+    width: 100%;
+    margin: 0 auto !important;
+    padding: 0.9rem 1.15rem !important;
+    align-self: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 0.7rem;
+  }
+  .booking__variant-value,
+  .booking__variant-price {
+    font-size: 1rem !important;
+  }
+
+  /* Formulář – jeden sloupec s lepším paddingem polí */
+  .booking__form-col .form {
+    grid-template-columns: 1fr !important;
+    gap: 0.85rem;
+  }
+  .booking__form-col .field {
+    padding: 1rem 1.15rem !important;
+  }
+  /* Inputy – font-size 16px předchází zoom na focus v iOS */
+  .booking__form-col input[type="text"],
+  .booking__form-col input[type="email"],
+  .booking__form-col input[type="tel"],
+  .booking__form-col select,
+  .booking__form-col textarea {
+    font-size: 16px;
+  }
+  .booking__form-col .field label {
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    margin-bottom: 0.15rem;
+  }
+
+  /* Time picker – grid s auto-fit: tlačítka rovnoměrně vyplní šířku field */
+  .time-picker { gap: 0.7rem; }
+  .time-picker__row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+    gap: 0.35rem;
+    width: 100%;
+  }
+  .time-slot {
+    font-size: 0.78rem;
+    padding: 0.6rem 0.4rem;
+    min-height: 40px;
+    text-align: center;
+    min-width: 0;
+    width: 100%;
+  }
+  .time-picker__hint,
+  .time-picker__legend,
+  .time-picker__total {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .time-picker__total {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+    padding: 0.85rem 1rem;
+  }
+  .time-picker__total-label,
+  .time-picker__total-detail {
+    font-size: 0.72rem;
+  }
+
+  /* Overtime + crew toggle – plné šířky, čitelné */
+  .overtime-toggle,
+  .crew-toggle {
+    padding: 1rem 1.15rem;
+  }
+  /* Overtime time-popup pickery — Od / → / Do v jedné řadě, šipka mezi nimi */
+  .overtime-times {
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    align-items: flex-end;
+  }
+  .time-pop {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+  .time-pop__btn {
+    padding: 0.65rem 0.7rem;
+    font-size: 0.95rem;
+  }
+  .time-pop__sep {
+    flex: 0 0 auto;
+    padding-bottom: 0.85rem;
+    font-size: 1rem;
+  }
+  /* Overtime hint a summary — kompaktnější */
+  .overtime-summary { padding: 0.7rem 0.9rem; }
+  .overtime-rate { font-size: 0.85rem; }
+  .overtime-hint {
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+  /* Crew options 1 sloupec */
+  .crew-options {
+    grid-template-columns: 1fr !important;
+    gap: 0.55rem;
+  }
+  .crew-option__name { font-size: 0.88rem; }
+  .crew-option__rate { font-size: 0.72rem; }
+  /* Crew summary kompaktnější */
+  .crew-summary { padding: 0.7rem 0.9rem; }
+  .crew-summary__hint { font-size: 0.68rem; }
+
+  /* Cena celkem – vycentrované na střed obrazovky (jako kalendář a variant chip) */
+  .booking-form__total {
+    max-width: 420px;
+    width: 100%;
+    margin: 1.5rem auto 0;
+    padding: 1.3rem 1.2rem;
+    align-self: center;
+    text-align: left;
+  }
+  .booking-form__submit {
+    width: 100%;
+    padding: 1.1rem 1.4rem;
+    font-size: 0.95rem;
+    letter-spacing: 0.14em;
+    margin-top: 0.5rem;
+  }
+
+  /* Lock overlay – musí pokrýt CELÝ kalendář (inset: 0). Max-width nesmí
+     být na buttonu, jinak nezakryje pravou stranu. Velikost textu řešíme
+     uvnitř — na .calendar__lock-text. */
+  #calendarLockBtn {
+    padding: 1.2rem 1.5rem;
+    line-height: 1.4;
+    text-align: center;
+    max-width: none;
+  }
+  .calendar__lock-text {
+    font-size: 0.82rem;
+    letter-spacing: 0.1em;
+  }
+  .calendar__lock-sub {
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+  }
 }
